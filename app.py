@@ -136,7 +136,7 @@ with st.sidebar:
     a_sel = st.number_input("Ano", 2024, 2030, datetime.now().year)
     if st.button("🚀 GERAR PDF"):
         rows = database.get_all_chamados()
-        df = pd.DataFrame(rows, columns=['id','data','caso','pms','hotel','inicio','termino','obs'])
+        df = pd.DataFrame(rows, columns=['id','data','caso','pms','hotel','inicio','termino','observacoes'])
         df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
         report_generator.gerar_pdf(df_ag, st.session_state.user['nome'], m_sel, str(a_sel))
         with open("folha_horas.pdf", "rb") as f:
