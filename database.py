@@ -88,7 +88,7 @@ def sync_hotels():
             conn = get_connection()
             cursor = conn.cursor()
             for rid, nome in hotels_data:
-                cursor.execute("INSERT OR IGNORE INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
+                cursor.execute("INSERT OR REPLACE INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
             conn.commit()
             conn.close()
         except Exception as e:
@@ -98,7 +98,9 @@ def sync_hotels():
 def get_hoteis():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT rid, nome FROM hoteis ORDER BY nome ASC")
+    cursor.execute(
+        "SELECT rid, nome FROM hoteis WHERE rid IS NOT NULL GROUP BY rid ORDER BY nome ASC"
+    )
     rows = cursor.fetchall()
     conn.close()
     return rows

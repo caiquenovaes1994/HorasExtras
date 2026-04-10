@@ -203,11 +203,11 @@ with tabs[2]:
     st.subheader("Gestão de Hotéis")
     if st.button("➕ Adicionar Hotel"): modal_novo_hotel()
     h_list = database.get_hoteis()
-    for r, n in h_list:
+    for i, (r, n) in enumerate(h_list):
         col_n, col_b1, col_b2 = st.columns([4, 1, 1])
         col_n.write(f"**{r}** - {n}")
-        if col_b1.button("✏️", key=f"edh_{r}"): modal_editar_hotel(r, n)
-        if col_b2.button("🗑️", key=f"dlh_{r}"): database.delete_hotel(r); st.rerun()
+        if col_b1.button("✏️", key=f"edh_{i}_{r}"): modal_editar_hotel(r, n)
+        if col_b2.button("🗑️", key=f"dlh_{i}_{r}"): database.delete_hotel(r); st.rerun()
 
 with tabs[3]:
     if st.session_state.user['admin']:
