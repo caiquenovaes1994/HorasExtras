@@ -63,11 +63,12 @@ def calcular_duracao(inicio_str, termino_str):
     except: return timedelta(0)
 
 def formatar_timedelta(td):
-    if not td or td.total_seconds() == 0: return ""
+    if not td or td.total_seconds() <= 0: return ""
     total_seconds = int(td.total_seconds())
     hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f"{hours:02}:{minutes:02}:{seconds:02}"
+    minutes, _ = divmod(remainder, 60)
+    # Excel usually doesn't show seconds in these sheets unless specific
+    return f"{hours:02}:{minutes:02}"
 
 def obter_faixa_periodo(mes_ref_extenso, ano_ref):
     meses_pt = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
@@ -107,7 +108,7 @@ def agrupar_por_data(df, mes_ref, ano_ref):
     df_agrupado['horas_trabalhadas'] = df_agrupado['duracao_td'].apply(formatar_timedelta)
     
     def calc_percentual(row):
-        if row['horas_trabalhadas'] == "": return pd.Series(["", ""])
+        if not row['horas_trabalhadas']: return pd.Series(["", ""])
         is_100 = row['semana'] in ["SÁBADO", "DOMINGO", "FERIADO"]
         if is_100: return pd.Series(["", row['horas_trabalhadas']])
         return pd.Series([row['horas_trabalhadas'], ""])

@@ -54,6 +54,8 @@ _DEFAULTS: dict = {
     "dlg_hotel_editar":   None,   # {"rid": …, "nome": …}
     "dlg_user_novo":      False,
     "dlg_user_editar":    None,   # {"uid": …, "user": …, "nome": …, "admin": …}
+    "dlg_reg_editar":     None,   # ID do registro
+    "dlg_reg_deletar":    None,   # ID do registro
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -199,6 +201,65 @@ def _dlg_editar_usuario():
         st.rerun()
 
 
+@st.dialog("Editar Registro")
+def _dlg_editar_registro():
+    cid = st.session_state.dlg_reg_editar
+    row = database.get_chamado_by_id(cid)
+    if not row:
+        st.error("Registro não encontrado.")
+        if st.button("Fechar"):
+            st.session_state.dlg_reg_editar = None
+            st.rerun()
+        return
+
+    # row structure: (id, data, caso, pms, hotel, inicio, termino, obs)
+    with st.form("frm_edit_reg"):
+        f_data = st.date_input("Data", value=datetime.strptime(row[1], "%Y-%m-%d"))
+        f_caso = st.text_input("Caso / INC", value=row[2] or "")
+        
+        h_rows = database.get_hoteis()
+        h_opts = [f"{r} - {n}" for r, n in h_rows]
+        current_h = f"{row[3]} - {row[4]}"
+        try:
+            h_idx = h_opts.index(current_h)
+        except:
+            h_idx = None
+            
+        f_hsel = st.selectbox("Hotel / PMS", options=h_opts, index=h_idx)
+        c1, c2 = st.columns(2)
+        f_inicio = c1.text_input("Início", value=row[5])
+        f_fim    = c2.text_input("Término", value=row[6])
+        f_obs    = st.text_area("Observações", value=row[7] or "")
+        
+        cb1, cb2 = st.columns(2)
+        if cb1.form_submit_button("SALVAR", use_container_width=True):
+            rid_, hnome_ = (f_hsel.split(" - ", 1) if f_hsel and " - " in f_hsel else ("", f_hsel))
+            database.update_chamado(cid, f_data.strftime("%Y-%m-%d"), f_caso.strip(), rid_, hnome_, 
+                                    utils.processar_input_horario(f_inicio), 
+                                    utils.processar_input_horario(f_fim), f_obs.strip())
+            st.success("Atualizado!")
+            st.session_state.dlg_reg_editar = None
+            st.rerun()
+        if cb2.form_submit_button("CANCELAR", use_container_width=True):
+            st.session_state.dlg_reg_editar = None
+            st.rerun()
+
+
+@st.dialog("Confirmar Exclusão")
+def _dlg_confirmar_delecao():
+    cid = st.session_state.dlg_reg_deletar
+    st.warning(f"Tem certeza que deseja excluir o registro ID {cid}?")
+    c1, c2 = st.columns(2)
+    if c1.button("SIM, EXCLUIR", use_container_width=True, type="primary"):
+        database.delete_chamado(cid)
+        st.success("Removido!")
+        st.session_state.dlg_reg_deletar = None
+        st.rerun()
+    if c2.button("NÃO", use_container_width=True):
+        st.session_state.dlg_reg_deletar = None
+        st.rerun()
+
+
 # Disparar modais conforme session_state
 if st.session_state.dlg_hotel_novo:
     _dlg_novo_hotel()
@@ -208,6 +269,10 @@ if st.session_state.dlg_user_novo:
     _dlg_novo_usuario()
 if st.session_state.dlg_user_editar is not None:
     _dlg_editar_usuario()
+if st.session_state.dlg_reg_editar is not None:
+    _dlg_editar_registro()
+if st.session_state.dlg_reg_deletar is not None:
+    _dlg_confirmar_delecao()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -243,6 +308,10 @@ with st.sidebar:
             with open(path, "rb") as fh:
                 st.session_state["pdf_bytes"] = fh.read()
             st.session_state["pdf_nome"] = path
+            # Limpeza imediata do arquivo temporário no servidor
+            import os
+            if os.path.exists(path):
+                os.remove(path)
             st.success("✅ PDF gerado!")
         except Exception as ex:
             import traceback
@@ -314,21 +383,34 @@ with TABS[0]:
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────
 with TABS[1]:
-    st.subheader("Histórico de Registros")
     rows = database.get_all_chamados()
     if rows:
-        df_h = pd.DataFrame(
-            rows,
-            columns=["ID","Data","Caso","PMS","Hotel","Início","Término","Obs"]
-        )
-        df_h["Data"] = pd.to_datetime(df_h["Data"]).dt.strftime("%d/%m/%Y")
-        st.dataframe(df_h.drop(columns=["ID"]), use_container_width=True, hide_index=True)
-        st.markdown("---")
-        with st.expander("🗑️ Remover um registro"):
-            id_del = st.number_input("ID do registro", min_value=1, step=1)
-            if st.button("Remover", type="primary"):
-                database.delete_chamado(int(id_del))
-                st.success("Removido.")
+        # Tabela com botões de ação
+        cols = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1.2])
+        headers = ["Data", "Caso", "PMS", "Hotel", "Início", "Término", "Obs", "Ações"]
+        for col, h in zip(cols, headers):
+            col.markdown(f"**{h}**")
+        st.divider()
+        
+        for r in rows:
+            # (id, data, caso, pms, hotel, inicio, termino, obs)
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1.2])
+            dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
+            c1.write(dt_fmt)
+            c2.write(r[2] or "—")
+            c3.write(r[3] or "—")
+            c4.write(r[4] or "—")
+            c5.write(r[5])
+            c6.write(r[6])
+            c7.write(r[7] or "—")
+            
+            # Botões de ação
+            bt_ed, bt_del = c8.columns(2)
+            if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
+                st.session_state.dlg_reg_editar = r[0]
+                st.rerun()
+            if bt_del.button("🗑️", key=f"del_reg_{r[0]}", help="Excluir registro"):
+                st.session_state.dlg_reg_deletar = r[0]
                 st.rerun()
     else:
         st.info("Nenhum registro encontrado.")

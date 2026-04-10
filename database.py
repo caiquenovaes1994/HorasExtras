@@ -253,10 +253,27 @@ def save_chamado(data, caso, pms, hotel, inicio, termino, obs):
 def get_all_chamados() -> list[tuple]:
     conn  = get_connection()
     rows  = conn.execute(
-        "SELECT * FROM chamados ORDER BY data DESC, inicio ASC"
+        "SELECT * FROM chamados ORDER BY data ASC, inicio ASC"
     ).fetchall()
     conn.close()
     return rows
+
+
+def get_chamado_by_id(cid: int) -> tuple | None:
+    conn = get_connection()
+    row  = conn.execute("SELECT * FROM chamados WHERE id = ?", (cid,)).fetchone()
+    conn.close()
+    return row
+
+
+def update_chamado(cid, data, caso, pms, hotel, inicio, termino, obs):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE chamados SET data=?, caso=?, pms=?, hotel=?, inicio=?, termino=?, observacoes=? WHERE id=?",
+        (data, caso or "", pms, hotel, inicio, termino, obs or None, cid)
+    )
+    conn.commit()
+    conn.close()
 
 
 def delete_chamado(cid: int):
