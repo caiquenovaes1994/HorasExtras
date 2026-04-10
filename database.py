@@ -182,6 +182,16 @@ def delete_user(uid):
     conn.commit()
     conn.close()
 
+def update_password(uid, new_password):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE usuarios SET password = ?, must_change_password = 0 WHERE id = ?",
+        (hash_password(new_password), uid)
+    )
+    conn.commit()
+    conn.close()
+
 def set_password_changed(uid):
     conn = get_connection()
     cursor = conn.cursor()

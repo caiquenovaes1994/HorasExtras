@@ -113,8 +113,10 @@ if st.session_state.user.get('must_change'):
                 if np == cp and len(np) >= 6:
                     database.update_password(st.session_state.user['id'], np)
                     st.session_state.user['must_change'] = False
+                    st.success("Senha alterada com sucesso!")
                     st.rerun()
-                else: st.error("Verifique os critérios.")
+                else:
+                    st.error("A senha deve ter no mínimo 6 caracteres e as dois campos devem ser iguais.")
     st.stop()
 
 # --- Conteúdo Principal ---

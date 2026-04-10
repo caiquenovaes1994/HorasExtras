@@ -1,14 +1,37 @@
 import pandas as pd
-from datetime import datetime, time, timedelta
+from datetime import datetime, date, time, timedelta
 import holidays
 
+# Cache por ano para evitar recriação a cada linha
+_feriados_cache = {}
+
+def get_feriados(ano: int):
+    """Retorna feriados nacionais + estaduais SP + municipais São Paulo/SP."""
+    if ano in _feriados_cache:
+        return _feriados_cache[ano]
+
+    # Nacionais
+    f = holidays.Brazil(state="SP", years=ano)
+
+    # Municipais de São Paulo/SP (fixos que a lib pode não incluir)
+    municipais = {
+        date(ano, 1, 25): "Aniversário de São Paulo",
+        date(ano, 7, 9):  "Revolução Constitucionalista",
+        date(ano, 11, 20): "Dia da Consciência Negra",
+    }
+    f.update(municipais)
+
+    _feriados_cache[ano] = f
+    return f
+
 def get_dia_semana(data):
-    """Retorna o dia da semana em caixa alta ou FERIADO."""
+    """Retorna o dia da semana em caixa alta ou FERIADO (incluindo SP municipal)."""
     dias = ["SEGUNDA-FEIRA", "TERÇA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SÁBADO", "DOMINGO"]
-    br_holidays = holidays.Brazil()
-    if data in br_holidays:
+    data_date = data.date() if hasattr(data, 'date') else data
+    feriados = get_feriados(data_date.year)
+    if data_date in feriados:
         return "FERIADO"
-    return dias[data.weekday()]
+    return dias[data_date.weekday()]
 
 def processar_input_horario(s):
     """Converte '0730' em '07:30', ou mantém o formato se já estiver correto."""
