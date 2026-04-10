@@ -1,239 +1,266 @@
 import sqlite3
 import os
 import hashlib
-import shutil
 
-# Nova localização do banco de dados
-DB_DIR = "data"
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFIGURAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+DB_DIR  = "data"
 DB_NAME = os.path.join(DB_DIR, "horas_extras.db")
 EXTERNAL_SOURCE = os.path.join(DB_DIR, "hotels_source.sqlite")
 
-def get_connection():
-    if not os.path.exists(DB_DIR):
-        os.makedirs(DB_DIR)
+
+def get_connection() -> sqlite3.Connection:
+    os.makedirs(DB_DIR, exist_ok=True)
     return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-def hash_password(password):
+
+def _hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INICIALIZAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
 def init_db():
-    conn = get_connection()
+    conn   = get_connection()
     cursor = conn.cursor()
-    
-    # Chamados (INC agora opcional na lógica, mas campo mantido)
-    cursor.execute("""
+
+    cursor.executescript("""
         CREATE TABLE IF NOT EXISTS chamados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data DATE NOT NULL,
-            caso TEXT,
-            pms TEXT,
-            hotel TEXT,
-            inicio TIME NOT NULL,
-            termino TIME NOT NULL,
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            data        DATE    NOT NULL,
+            caso        TEXT,
+            pms         TEXT,
+            hotel       TEXT,
+            inicio      TIME    NOT NULL,
+            termino     TIME    NOT NULL,
             observacoes TEXT
-        )
-    """)
-    
-    # Usuários com flag must_change_password
-    cursor.execute("""
+        );
+
         CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            nome_completo TEXT,
-            is_admin BOOLEAN DEFAULT 0,
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            username             TEXT UNIQUE NOT NULL,
+            password             TEXT NOT NULL,
+            nome_completo        TEXT,
+            is_admin             BOOLEAN DEFAULT 0,
             must_change_password BOOLEAN DEFAULT 1
-        )
-    """)
-    
-    # Hotéis com constraint UNIQUE no RID
-    cursor.execute("""
+        );
+
         CREATE TABLE IF NOT EXISTS hoteis (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rid TEXT UNIQUE,
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            rid  TEXT UNIQUE,
             nome TEXT NOT NULL
-        )
+        );
     """)
-    
-    # Admin Padrão
-    admin_user = "cnovaes"
-    admin_pw = hash_password("Luigi170513")
-    cursor.execute("SELECT id FROM usuarios WHERE username = ?", (admin_user,))
+
+    # Admin padrão
+    cursor.execute("SELECT id FROM usuarios WHERE username = 'cnovaes'")
     if not cursor.fetchone():
-        cursor.execute("""
-            INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password)
-            VALUES (?, ?, ?, 1, 0)
-        """, (admin_user, admin_pw, "CAIQUE NOVAES"))
-    
-    # Hotel Obrigatório
-    cursor.execute("SELECT id FROM hoteis WHERE rid = 'B669'")
-    if not cursor.fetchone():
-        cursor.execute("INSERT INTO hoteis (rid, nome) VALUES ('B669', 'Ibis Caruaru')")
-    
+        cursor.execute(
+            "INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password) "
+            "VALUES ('cnovaes', ?, 'CAIQUE NOVAES', 1, 0)",
+            (_hash("Luigi170513"),)
+        )
+
+    # Hotel obrigatório
+    cursor.execute("INSERT OR IGNORE INTO hoteis (rid, nome) VALUES ('B669', 'Ibis Caruaru')")
+
     conn.commit()
     conn.close()
-    # Sync apenas na primeira vez (tabela vazia)
-    conn2 = get_connection()
-    c2 = conn2.cursor()
-    c2.execute("SELECT COUNT(*) FROM hoteis")
-    count = c2.fetchone()[0]
+
+    # Sincroniza hotéis externos apenas se a tabela estiver praticamente vazia
+    conn2   = get_connection()
+    cur2    = conn2.cursor()
+    cur2.execute("SELECT COUNT(*) FROM hoteis")
+    total   = cur2.fetchone()[0]
     conn2.close()
-    if count <= 1:  # Só B669 inserido
-        sync_hotels()
+    if total <= 1:
+        _sync_hotels()
 
-def sync_hotels():
-    """Sincroniza do arquivo fonte usando SELECT DISTINCT."""
-    if os.path.exists(EXTERNAL_SOURCE):
-        try:
-            ext_conn = sqlite3.connect(EXTERNAL_SOURCE)
-            ext_cursor = ext_conn.cursor()
-            # Usar DISTINCT para evitar duplicados da fonte
-            ext_cursor.execute("SELECT DISTINCT rid, nome FROM hotels WHERE rid IS NOT NULL")
-            hotels_data = ext_cursor.fetchall()
-            ext_conn.close()
-            
-            conn = get_connection()
-            cursor = conn.cursor()
-            for rid, nome in hotels_data:
-                cursor.execute("INSERT OR REPLACE INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"Erro na sincronização: {e}")
 
-# --- CRUD Hotéis ---
-def get_hoteis():
-    """Retorna hotéis sem duplicatas, ordenados por nome."""
+def _sync_hotels():
+    """Importa hotéis do SQLite externo (somente uma vez, quando vazio)."""
+    if not os.path.exists(EXTERNAL_SOURCE):
+        return
+    try:
+        ext = sqlite3.connect(EXTERNAL_SOURCE)
+        rows = ext.execute(
+            "SELECT DISTINCT rid, nome FROM hotels WHERE rid IS NOT NULL AND rid != ''"
+        ).fetchall()
+        ext.close()
+
+        conn   = get_connection()
+        cursor = conn.cursor()
+        cursor.executemany("INSERT OR IGNORE INTO hoteis (rid, nome) VALUES (?, ?)", rows)
+        conn.commit()
+        conn.close()
+        print(f"[sync] {len(rows)} hotéis importados.")
+    except Exception as e:
+        print(f"[sync] Erro: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HOTÉIS — CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+def get_hoteis() -> list[tuple]:
+    """Retorna lista de (rid, nome) sem duplicatas, ordenada por nome."""
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
+    rows = conn.execute(
         "SELECT DISTINCT rid, nome FROM hoteis "
         "WHERE rid IS NOT NULL AND rid != '' "
-        "GROUP BY rid ORDER BY nome ASC"
-    )
-    rows = cursor.fetchall()
+        "GROUP BY rid "
+        "ORDER BY nome COLLATE NOCASE ASC"
+    ).fetchall()
     conn.close()
     return rows
 
-def save_hotel(rid, nome):
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
-        conn.commit()
-        return True
-    except: return False
-    finally: conn.close()
 
-def update_hotel(old_rid, new_rid, new_nome):
-    conn = get_connection()
-    cursor = conn.cursor()
+def save_hotel(rid: str, nome: str) -> bool:
     try:
-        cursor.execute("UPDATE hoteis SET rid = ?, nome = ? WHERE rid = ?", (new_rid, new_nome, old_rid))
+        conn = get_connection()
+        conn.execute("INSERT INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
         conn.commit()
+        conn.close()
         return True
-    except: return False
-    finally: conn.close()
+    except sqlite3.IntegrityError:
+        return False
 
-def delete_hotel(rid):
+
+def update_hotel(old_rid: str, new_rid: str, new_nome: str) -> bool:
+    try:
+        conn = get_connection()
+        conn.execute(
+            "UPDATE hoteis SET rid = ?, nome = ? WHERE rid = ?",
+            (new_rid, new_nome, old_rid)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def delete_hotel(rid: str):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM hoteis WHERE rid = ?", (rid,))
+    conn.execute("DELETE FROM hoteis WHERE rid = ?", (rid,))
     conn.commit()
     conn.close()
 
-# --- CRUD Usuários ---
-def verify_login(username, password):
+
+# ─────────────────────────────────────────────────────────────────────────────
+# USUÁRIOS — CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+def verify_login(username: str, password: str) -> dict | None:
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password FROM usuarios WHERE username = ?", (username,))
-    user = cursor.fetchone()
+    row  = conn.execute(
+        "SELECT id, username, password, nome_completo, is_admin, must_change_password "
+        "FROM usuarios WHERE username = ?",
+        (username,)
+    ).fetchone()
     conn.close()
-    if user and user[2] == hash_password(password):
-        return {"id": user[0], "username": user[1], "nome": user[3], "admin": user[4], "must_change": user[5]}
+    if row and row[2] == _hash(password):
+        return {
+            "id":          row[0],
+            "username":    row[1],
+            "nome":        row[3],
+            "admin":       bool(row[4]),
+            "must_change": bool(row[5]),
+        }
     return None
 
-def get_all_users():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, nome_completo, is_admin, must_change_password FROM usuarios")
-    users = cursor.fetchall()
+
+def get_all_users() -> list[tuple]:
+    conn  = get_connection()
+    rows  = conn.execute(
+        "SELECT id, username, nome_completo, is_admin, must_change_password FROM usuarios ORDER BY nome_completo"
+    ).fetchall()
     conn.close()
-    return users
+    return rows
 
-def create_user(username, password, nome, is_admin):
-    conn = get_connection()
-    cursor = conn.cursor()
+
+def create_user(username: str, password: str, nome: str, is_admin: bool) -> bool:
     try:
-        cursor.execute("INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password) VALUES (?, ?, ?, ?, 1)", 
-                       (username, hash_password(password), nome, 1 if is_admin else 0))
+        conn = get_connection()
+        conn.execute(
+            "INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password) "
+            "VALUES (?, ?, ?, ?, 1)",
+            (username, _hash(password), nome, 1 if is_admin else 0)
+        )
         conn.commit()
+        conn.close()
         return True
-    except: return False
-    finally: conn.close()
+    except sqlite3.IntegrityError:
+        return False
 
-def update_user(uid, username, nome, is_admin, password=None):
-    conn = get_connection()
-    cursor = conn.cursor()
+
+def update_user(uid: int, username: str, nome: str, is_admin: bool, password: str | None = None) -> bool:
     try:
+        conn = get_connection()
         if password:
-            cursor.execute("UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, password=?, must_change_password=1 WHERE id=?", 
-                           (username, nome, 1 if is_admin else 0, hash_password(password), uid))
+            conn.execute(
+                "UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, password=?, must_change_password=1 WHERE id=?",
+                (username, nome, 1 if is_admin else 0, _hash(password), uid)
+            )
         else:
-            cursor.execute("UPDATE usuarios SET username=?, nome_completo=?, is_admin=? WHERE id=?", 
-                           (username, nome, 1 if is_admin else 0, uid))
+            conn.execute(
+                "UPDATE usuarios SET username=?, nome_completo=?, is_admin=? WHERE id=?",
+                (username, nome, 1 if is_admin else 0, uid)
+            )
         conn.commit()
+        conn.close()
         return True
-    except: return False
-    finally: conn.close()
+    except Exception:
+        return False
 
-def delete_user(uid):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM usuarios WHERE id = ?", (uid,))
-    conn.commit()
-    conn.close()
 
-def update_password(uid, new_password):
+def update_password(uid: int, new_password: str):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE usuarios SET password = ?, must_change_password = 0 WHERE id = ?",
-        (hash_password(new_password), uid)
+    conn.execute(
+        "UPDATE usuarios SET password=?, must_change_password=0 WHERE id=?",
+        (_hash(new_password), uid)
     )
     conn.commit()
     conn.close()
 
-def set_password_changed(uid):
+
+def delete_user(uid: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET must_change_password = 0 WHERE id = ?", (uid,))
+    conn.execute("DELETE FROM usuarios WHERE id = ?", (uid,))
     conn.commit()
     conn.close()
 
-# --- Chamados ---
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAMADOS — CRUD
+# ─────────────────────────────────────────────────────────────────────────────
 def save_chamado(data, caso, pms, hotel, inicio, termino, obs):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes) VALUES (?,?,?,?,?,?,?)", 
-                   (data, caso, pms, hotel, inicio, termino, obs))
+    conn.execute(
+        "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (data, caso or None, pms, hotel, inicio, termino, obs or None)
+    )
     conn.commit()
     conn.close()
 
-def get_all_chamados():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM chamados ORDER BY data DESC, inicio ASC")
-    rows = cursor.fetchall()
+
+def get_all_chamados() -> list[tuple]:
+    conn  = get_connection()
+    rows  = conn.execute(
+        "SELECT * FROM chamados ORDER BY data DESC, inicio ASC"
+    ).fetchall()
     conn.close()
     return rows
 
-def delete_chamado(cid):
+
+def delete_chamado(cid: int):
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM chamados WHERE id = ?", (cid,))
+    conn.execute("DELETE FROM chamados WHERE id = ?", (cid,))
     conn.commit()
     conn.close()
+
 
 if __name__ == "__main__":
     init_db()
+    print("DB inicializado.")
