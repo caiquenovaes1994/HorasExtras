@@ -12,7 +12,7 @@ EXTERNAL_SOURCE = os.path.join(DB_DIR, "hotels_source.sqlite")
 
 def get_connection() -> sqlite3.Connection:
     os.makedirs(DB_DIR, exist_ok=True)
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+    return sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
 
 
 def _hash(password: str) -> str:
@@ -25,6 +25,10 @@ def _hash(password: str) -> str:
 def init_db():
     conn   = get_connection()
     cursor = conn.cursor()
+
+    # WAL mode: permite leituras concorrentes sem bloquear (essencial com Streamlit)
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
 
     cursor.executescript("""
         CREATE TABLE IF NOT EXISTS chamados (
@@ -239,7 +243,8 @@ def save_chamado(data, caso, pms, hotel, inicio, termino, obs):
     conn.execute(
         "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (data, caso or None, pms, hotel, inicio, termino, obs or None)
+        # Usa string vazia ao invés de None para compatibilidade com schema antigo (NOT NULL)
+        (data, caso or "", pms, hotel, inicio, termino, obs or None)
     )
     conn.commit()
     conn.close()

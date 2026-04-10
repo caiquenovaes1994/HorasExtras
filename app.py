@@ -10,7 +10,13 @@ import report_generator
 # CONFIGURAÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Controle de Horas Extras", layout="wide")
-database.init_db()
+
+@st.cache_resource
+def _init_db_once():
+    """Inicializa o banco de dados apenas uma vez por sessão do servidor."""
+    database.init_db()
+
+_init_db_once()
 
 st.markdown("""
 <style>
