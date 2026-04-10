@@ -134,13 +134,30 @@ with st.sidebar:
     meses = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
     m_sel = st.selectbox("Mês Referente", meses, index=datetime.now().month - 1)
     a_sel = st.number_input("Ano", 2024, 2030, datetime.now().year)
+
     if st.button("🚀 GERAR PDF"):
-        rows = database.get_all_chamados()
-        df = pd.DataFrame(rows, columns=['id','data','caso','pms','hotel','inicio','termino','observacoes'])
-        df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
-        report_generator.gerar_pdf(df_ag, st.session_state.user['nome'], m_sel, str(a_sel))
-        with open("folha_horas.pdf", "rb") as f:
-            st.download_button("📂 Baixar PDF", f, "Folha_Horas.pdf", "application/pdf")
+        try:
+            rows = database.get_all_chamados()
+            df_pdf = pd.DataFrame(rows, columns=['id','data','caso','pms','hotel','inicio','termino','observacoes'])
+            df_ag = utils.agrupar_por_data(df_pdf, m_sel, a_sel)
+            pdf_path = f"folha_horas_{m_sel}_{a_sel}.pdf"
+            report_generator.gerar_pdf(df_ag, st.session_state.user['nome'], m_sel, str(a_sel), pdf_path)
+            with open(pdf_path, "rb") as f:
+                st.session_state['pdf_bytes'] = f.read()
+            st.session_state['pdf_nome'] = pdf_path
+            st.success("PDF gerado!")
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}")
+            st.session_state.pop('pdf_bytes', None)
+
+    # Renderiza o botão de download de forma consistente (fora do if button)
+    if st.session_state.get('pdf_bytes'):
+        st.download_button(
+            label="📂 Baixar PDF",
+            data=st.session_state['pdf_bytes'],
+            file_name=st.session_state.get('pdf_nome', 'Folha_Horas.pdf'),
+            mime="application/pdf"
+        )
 
 tabs = st.tabs(["📝 Novo Registro", "📋 Histórico", "🏨 Hotéis", "⚙️ Usuários"])
 
