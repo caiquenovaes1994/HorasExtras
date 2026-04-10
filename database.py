@@ -72,7 +72,14 @@ def init_db():
     
     conn.commit()
     conn.close()
-    sync_hotels()
+    # Sync apenas na primeira vez (tabela vazia)
+    conn2 = get_connection()
+    c2 = conn2.cursor()
+    c2.execute("SELECT COUNT(*) FROM hoteis")
+    count = c2.fetchone()[0]
+    conn2.close()
+    if count <= 1:  # Só B669 inserido
+        sync_hotels()
 
 def sync_hotels():
     """Sincroniza do arquivo fonte usando SELECT DISTINCT."""
@@ -96,10 +103,13 @@ def sync_hotels():
 
 # --- CRUD Hotéis ---
 def get_hoteis():
+    """Retorna hotéis sem duplicatas, ordenados por nome."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT rid, nome FROM hoteis WHERE rid IS NOT NULL GROUP BY rid ORDER BY nome ASC"
+        "SELECT DISTINCT rid, nome FROM hoteis "
+        "WHERE rid IS NOT NULL AND rid != '' "
+        "GROUP BY rid ORDER BY nome ASC"
     )
     rows = cursor.fetchall()
     conn.close()
