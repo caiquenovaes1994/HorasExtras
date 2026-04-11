@@ -109,7 +109,8 @@ def agrupar_por_data(df, mes_ref, ano_ref):
     
     def calc_percentual(row):
         if not row['horas_trabalhadas']: return pd.Series(["", ""])
-        is_100 = row['semana'] in ["SÁBADO", "DOMINGO", "FERIADO"]
+        # SÁBADOS agora são 50%. Apenas Domingos e Feriados são 100%.
+        is_100 = row['semana'] in ["DOMINGO", "FERIADO"]
         if is_100: return pd.Series(["", row['horas_trabalhadas']])
         return pd.Series([row['horas_trabalhadas'], ""])
             
