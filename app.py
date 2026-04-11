@@ -79,6 +79,15 @@ _DEFAULTS: dict = {
     "dlg_perfil_editar":  False,
     "dlg_reg_editar":     None,   # ID do registro
     "dlg_reg_deletar":    None,   # ID do registro
+    # Campos do formulário de registro (Persistência)
+    "reg_data":           datetime.now(),
+    "reg_caso":           "",
+    "reg_hotel":          None,
+    "reg_motivo":         "",
+    "reg_inicio":         "",
+    "reg_termino":        "",
+    "reg_obs":            "",
+    "reg_reset":          False,
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -407,35 +416,54 @@ TABS = st.tabs(TABS_LIST)
 
 # ── ABA 0 – Novo Registro ─────────────────────────────────────────────────────
 with TABS[0]:
+    # Lógica de Reset Seguro (Evita erro de 'instantiated widget')
+    if st.session_state.get("reg_reset"):
+        st.session_state.reg_data    = datetime.now()
+        st.session_state.reg_caso    = ""
+        st.session_state.reg_hotel   = None
+        st.session_state.reg_motivo  = ""
+        st.session_state.reg_inicio  = ""
+        st.session_state.reg_termino = ""
+        st.session_state.reg_obs     = ""
+        st.session_state.reg_reset   = False
+
     st.subheader("Inserir Novo Chamado")
-    with st.form("frm_novo_reg", clear_on_submit=True):
+    with st.form("frm_novo_reg", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
-            f_data = st.date_input("Data do Atendimento", value=datetime.now(), format="DD/MM/YYYY")
-            f_caso = st.text_input("Caso / INC", placeholder="Opcional")
-            f_hsel = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel…")
-            f_motivo = st.text_input("Motivo * (Uso Interno)", placeholder="Descreva o motivo do chamado...")
+            f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
+            f_caso   = st.text_input("Caso / INC", placeholder="Opcional", key="reg_caso")
+            f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Opcional: Selecione ou busque o hotel…", key="reg_hotel")
+            f_motivo = st.text_input("Motivo * (Uso Interno)", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
         with c2:
-            f_inicio = st.text_input("Início *",  placeholder="08:00", value="")
-            f_fim    = st.text_input("Término *", placeholder="17:00", value="")
-            f_obs    = st.text_area("Observações (PDF)", placeholder="Opcional", height=138)
+            f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
+            f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
+            f_obs     = st.text_area("Observações (PDF)", placeholder="Opcional", height=138, key="reg_obs")
 
         if st.form_submit_button("💾 SALVAR", use_container_width=True):
-            if not f_hsel or not f_inicio or not f_fim or not f_motivo.strip():
-                st.error("Campos obrigatórios: Hotel, Início, Término e Motivo.")
+            if not f_inicio or not f_fim or not f_motivo.strip():
+                st.error("Campos obrigatórios: Início, Término e Motivo.")
             else:
-                rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
-                ti = utils.processar_input_horario(f_inicio)
-                tf = utils.processar_input_horario(f_fim)
-                database.save_chamado(
-                    f_data.strftime("%Y-%m-%d"),
-                    f_caso.strip() or None,
-                    rid_, hnome_, ti, tf,
-                    f_obs.strip() or None,
-                    f_motivo.strip()
-                )
-                st.success(f"✅ Registrado!")
-                st.rerun()
+                try:
+                    rid_, hnome_ = ("", "")
+                    if f_hsel:
+                        rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
+                    
+                    ti = utils.processar_input_horario(f_inicio)
+                    tf = utils.processar_input_horario(f_fim)
+                    database.save_chamado(
+                        f_data.strftime("%Y-%m-%d"),
+                        f_caso.strip() or None,
+                        rid_, hnome_, ti, tf,
+                        f_obs.strip() or None,
+                        f_motivo.strip()
+                    )
+                    st.success(f"✅ Registrado!")
+                    # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
+                    st.session_state.reg_reset = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
 
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────

@@ -237,9 +237,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     def f_real(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     fin_data = [
-        [Paragraph("<b>VALORES A RECEBER</b>", styles["Normal"])],
-        [f"Total Extra 50%: {f_real(val_50)}"],
-        [f"Total Extra 100%: {f_real(val_100)}"],
+        [f"Total Extra 50%: {f_real(val_50)}               Total Extra 100%: {f_real(val_100)}"],
         [Paragraph(f"<b>Total Geral a Receber: {f_real(val_tot)}</b>", styles["Normal"])]
     ]
     fin_table = Table(fin_data, colWidths=[26.1*cm])
