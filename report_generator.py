@@ -11,25 +11,40 @@ from datetime                  import datetime, timedelta
 from utils import formatar_timedelta
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIGURAÇÃO DE FONTES (CALIBRI)
+# CONFIGURAÇÃO DE FONTES (INTER)
 # ─────────────────────────────────────────────────────────────────────────────
 DEFAULT_FONT = "Helvetica"
 DEFAULT_FONT_BOLD = "Helvetica-Bold"
 
 def _registrar_fontes():
     global DEFAULT_FONT, DEFAULT_FONT_BOLD
-    calibri_path = "C:\\Windows\\Fonts\\calibri.ttf"
-    calibri_bold_path = "C:\\Windows\\Fonts\\calibrib.ttf"
+    
+    # Caminhos Sistema (Usuário caiqu)
+    user_fonts_dir = r"C:\Users\caiqu\AppData\Local\Microsoft\Windows\Fonts"
+    inter_reg_sys = os.path.join(user_fonts_dir, "InterVariable.ttf")
+    
+    calibri_path = r"C:\Windows\Fonts\calibri.ttf"
+    calibri_bold_path = r"C:\Windows\Fonts\calibrib.ttf"
     
     try:
-        if os.path.exists(calibri_path):
-            pdfmetrics.registerFont(TTFont('Calibri', calibri_path))
-            DEFAULT_FONT = 'Calibri'
-        if os.path.exists(calibri_bold_path):
-            pdfmetrics.registerFont(TTFont('Calibri-Bold', calibri_bold_path))
-            DEFAULT_FONT_BOLD = 'Calibri-Bold'
+        # 1. Registrar Regular (Inter)
+        if os.path.exists(inter_reg_sys):
+            pdfmetrics.registerFont(TTFont('Inter', inter_reg_sys))
+            DEFAULT_FONT = 'Inter'
+        elif os.path.exists(calibri_path):
+            pdfmetrics.registerFont(TTFont('Inter', calibri_path))
+            DEFAULT_FONT = 'Inter'
+            
+        # 2. Registrar Bold (Inter-Bold)
+        if os.path.exists(inter_reg_sys):
+            pdfmetrics.registerFont(TTFont('Inter-Bold', inter_reg_sys))
+            DEFAULT_FONT_BOLD = 'Inter-Bold'
+        elif os.path.exists(calibri_bold_path):
+            pdfmetrics.registerFont(TTFont('Inter-Bold', calibri_bold_path))
+            DEFAULT_FONT_BOLD = 'Inter-Bold'
+            
     except Exception as e:
-        print(f"Erro ao registrar Calibri: {e}")
+        print(f"Erro ao registrar fontes: {e}")
 
 _registrar_fontes()
 
@@ -65,32 +80,32 @@ def _to_td(s: str) -> timedelta:
 # GERADOR PRINCIPAL
 # ─────────────────────────────────────────────────────────────────────────────
 def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
-              ano: str, output_path: str = "folha_horas.pdf") -> str:
+              ano: str, valor_base: float, output_path: str = "folha_horas.pdf") -> str:
     
     pts_cm = 28.35
     doc = SimpleDocTemplate(
         output_path,
         pagesize=landscape(A4), 
         rightMargin=1.8*pts_cm, leftMargin=1.8*pts_cm,
-        topMargin=1.9*pts_cm,   bottomMargin=1.9*pts_cm,
+        topMargin=1.0*pts_cm,   bottomMargin=1.0*pts_cm,
     )
 
     styles = getSampleStyleSheet()
     elems  = []
 
-    # ── Título (Calibri 14 Bold) ─────────────────────────────────────────────
+    # ── Título (Inter 9 Bold) ─────────────────────────────────────────────
     title_style = ParagraphStyle(
         "TitleMain",
         parent=styles["Normal"],
         fontName=DEFAULT_FONT_BOLD,
-        fontSize=14,
+        fontSize=9,
         textColor=BLACK,
         alignment=1, # CENTER
         spaceAfter=10,
     )
     elems.append(Paragraph("FOLHA DE HORA EXTRA", title_style))
 
-    # ── Cabeçalho (Calibri 11) ───────────────────────────────────────────────
+    # ── Cabeçalho (Inter 7) ───────────────────────────────────────────────
     hdr_data = [
         ["COLABORADOR:", colaborador.upper(), "MÊS:", mes.upper(), "ANO:", ano]
     ]
@@ -98,13 +113,12 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     hdr_widths = [4.0*cm, 10.0*cm, 2.0*cm, 6.0*cm, 2.0*cm, 2.1*cm]
     hdr_table  = Table(hdr_data, colWidths=hdr_widths)
     hdr_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), DEFAULT_FONT_BOLD),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("ALIGN",    (0, 0), (-1, -1), "LEFT"),
-        ("VALIGN",   (0, 0), (-1, -1), "BOTTOM"),
-        ("LINEBELOW", (1, 0), (1, 0), 0.5, BLACK),
-        ("LINEBELOW", (3, 0), (3, 0), 0.5, BLACK),
-        ("LINEBELOW", (5, 0), (5, 0), 0.5, BLACK),
+        ("FONTNAME",   (0, 0), (-1, -1), DEFAULT_FONT_BOLD),
+        ("FONTSIZE",   (0, 0), (-1, -1), 7),
+        ("ALIGN",      (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 0), (-1, -1), WINE),
+        ("TEXTCOLOR",  (0, 0), (-1, -1), WHITE),
     ]))
     elems.append(hdr_table)
     elems.append(Spacer(1, 0.4*cm))
@@ -139,7 +153,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
             _clean(row["horas_trabalhadas"]),
             _clean(row["50%"]),
             _clean(row["100%"]),
-            _clean(row["caso"]),
+            _clean(row["observacoes"]),
         ]
         data_rows.append(r)
 
@@ -157,16 +171,18 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
 
     full_data = [COL_HDR] + data_rows + [footer]
 
-    # Alturas para caber em uma página:
-    # Útil A4L: 21.0 - 1.9*2 - ~2.0 (título/hdr) = ~15.2cm
+    # Alturas otimizadas: máximo 0.45cm para não esticar demais, mas encolhe para caber em uma página
     n_lines = len(full_data)
-    row_h   = (15.2 / n_lines) * cm
+    # Útil A4L: 21.0 - 1.0*2 (margens) - ~1.7 (title) - ~1.0 (header) - ~1.5 (financial) = ~15.5cm
+    max_total_h  = 15.5 * cm
+    target_row_h = 0.45 * cm
+    row_h        = min(target_row_h, max_total_h / n_lines)
     
     # Larguras colunas (Soma = 26.1cm)
     col_w = [
-        1.0*cm, # Dia
-        3.5*cm, # Semana
-        2.5*cm, # Data
+        1.2*cm, # Dia
+        3.8*cm, # Semana
+        2.8*cm, # Data
         1.5*cm, # Início
         1.5*cm, # Int
         1.5*cm, # Vol
@@ -174,7 +190,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
         2.0*cm, # Horas
         1.5*cm, # 50
         1.5*cm, # 100
-        8.1*cm  # Obs
+        7.3*cm  # Obs (-10%)
     ]
 
     main_table = Table(full_data, colWidths=col_w, rowHeights=[row_h]*n_lines)
@@ -182,7 +198,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     ts = [
         ("GRID",       (0, 0), (-1, -1), 0.5, BLACK),
         ("FONTNAME",   (0, 0), (-1, -1), DEFAULT_FONT),
-        ("FONTSIZE",   (0, 0), (-1, -1), 11),
+        ("FONTSIZE",   (0, 0), (-1, -1), 7),
         ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
         # Cabeçalho Vinho com Texto Branco
@@ -200,23 +216,41 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     ts.append(("BACKGROUND", (6, -1), (9, -1), WINE))
     ts.append(("TEXTCOLOR",  (6, -1), (9, -1), WHITE))
 
-    # Coluna Observação alinhada à esquerda
-    ts.append(("ALIGN", (10, 1), (10, -1), "LEFT"))
+    # Forçar centro total para dados (incluindo Observação a pedido do usuário)
+    ts.append(("ALIGN", (0, 1), (-1, -1), "CENTER"))
 
     main_table.setStyle(TableStyle(ts))
     elems.append(main_table)
 
-    # Assinaturas
-    elems.append(Spacer(1, 0.6*cm))
-    sign_data = [["_________________________________", "_________________________________"],
-                 ["COLABORADOR", "GESTOR"]]
-    sign_table = Table(sign_data, colWidths=[13.0*cm, 13.1*cm])
-    sign_table.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, -1), DEFAULT_FONT),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
+    # ── Seção Financeira (Valores a Receber) ──────────────────────────────────
+    elems.append(Spacer(1, 0.5*cm))
+    
+    # Cálculos Oficiais (Divisor 200)
+    v_hora = valor_base / 200.0
+    h50  = total_50.total_seconds() / 3600.0
+    h100 = total_100.total_seconds() / 3600.0
+    
+    val_50  = h50 * v_hora * 1.5
+    val_100 = h100 * v_hora * 2.0
+    val_tot = val_50 + val_100
+    
+    def f_real(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    fin_data = [
+        [Paragraph("<b>VALORES A RECEBER</b>", styles["Normal"])],
+        [f"Total Extra 50%: {f_real(val_50)}"],
+        [f"Total Extra 100%: {f_real(val_100)}"],
+        [Paragraph(f"<b>Total Geral a Receber: {f_real(val_tot)}</b>", styles["Normal"])]
+    ]
+    fin_table = Table(fin_data, colWidths=[26.1*cm])
+    fin_table.setStyle(TableStyle([
+        ("ALIGN",      (0, 0), (-1, -1), "LEFT"),
+        ("FONTNAME",   (0, 0), (-1, -1), DEFAULT_FONT),
+        ("FONTSIZE",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
     ]))
-    elems.append(sign_table)
+    elems.append(fin_table)
 
     doc.build(elems)
     return output_path

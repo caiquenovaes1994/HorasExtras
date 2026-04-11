@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas    as pd
 from datetime    import datetime
+import os
 
 import database
 import utils
@@ -37,6 +38,27 @@ section[data-testid="stSidebar"] > div {
 section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 { color: #ececec; }
+
+/* Ocultar Elementos de Sistema (User Request) */
+.stAppDeployButton { display: none !important; }
+#stStatusWidget { display: none !important; }
+[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; color: #800000 !important; }
+footer { visibility: hidden; }
+
+/* Esconder opções específicas do menu (Record, Print, etc) */
+div[data-testid="stToolbar"] { display: none !important; }
+
+/* Botão Lápis Sidebar (Sem contorno) */
+button[help="Editar perfil"] {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 0 !important;
+}
+button[help="Editar perfil"]:hover {
+    background: rgba(255,255,255,0.1) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,7 +75,8 @@ _DEFAULTS: dict = {
     "dlg_hotel_novo":     False,
     "dlg_hotel_editar":   None,   # {"rid": …, "nome": …}
     "dlg_user_novo":      False,
-    "dlg_user_editar":    None,   # {"uid": …, "user": …, "nome": …, "admin": …}
+    "dlg_user_editar":    None,   # {"uid": …, "user": …, "nome": …, "admin": …, "valor_base": …}
+    "dlg_perfil_editar":  False,
     "dlg_reg_editar":     None,   # ID do registro
     "dlg_reg_deletar":    None,   # ID do registro
 }
@@ -120,39 +143,36 @@ if st.session_state.user.get("must_change"):
 # MODAIS  (st.dialog)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.dialog("Novo Hotel")
+@st.dialog("Sugerir Novo Hotel")
 def _dlg_novo_hotel():
     with st.form("frm_novo_hotel", clear_on_submit=True):
-        rid  = st.text_input("Código RID")
+        rid  = st.text_input("RID")
         nome = st.text_input("Nome do Hotel")
-        ok   = st.form_submit_button("CADASTRAR", use_container_width=True)
+        ok   = st.form_submit_button("SOLICITAR CADASTRO", use_container_width=True)
     if ok:
         if not rid.strip() or not nome.strip():
-            st.warning("Preencha código e nome.")
-        elif database.save_hotel(rid.strip(), nome.strip()):
-            st.success("Hotel cadastrado!")
+            st.warning("Preencha RID e nome.")
+        else:
+            database.criar_solicitacao_hotel(rid.strip(), nome.strip(), 'CREATE', st.session_state.user["id"])
+            st.success("Solicitação enviada para aprovação!")
             st.session_state.dlg_hotel_novo = False
             st.rerun()
-        else:
-            st.error("Código já existe.")
 
 
-@st.dialog("Editar Hotel")
+@st.dialog("Sugerir Edição de Hotel")
 def _dlg_editar_hotel():
     d = st.session_state.dlg_hotel_editar
     with st.form("frm_edit_hotel"):
-        new_rid  = st.text_input("Código RID",     value=d["rid"])
-        new_nome = st.text_input("Nome do Hotel",  value=d["nome"])
+        new_rid  = st.text_input("RID (Não alterável)", value=d["rid"], disabled=True)
+        new_nome = st.text_input("Novo Nome do Hotel",  value=d["nome"])
         c1, c2   = st.columns(2)
-        salvar   = c1.form_submit_button("SALVAR",   use_container_width=True)
+        salvar   = c1.form_submit_button("SOLICITAR ALTERAÇÃO", use_container_width=True)
         cancelar = c2.form_submit_button("CANCELAR", use_container_width=True)
     if salvar:
-        if database.update_hotel(d["rid"], new_rid.strip(), new_nome.strip()):
-            st.success("Atualizado!")
-            st.session_state.dlg_hotel_editar = None
-            st.rerun()
-        else:
-            st.error("Erro ao atualizar.")
+        database.criar_solicitacao_hotel(d["rid"], new_nome.strip(), 'EDIT', st.session_state.user["id"])
+        st.success("Solicitação de edição enviada!")
+        st.session_state.dlg_hotel_editar = None
+        st.rerun()
     if cancelar:
         st.session_state.dlg_hotel_editar = None
         st.rerun()
@@ -164,12 +184,13 @@ def _dlg_novo_usuario():
         uname = st.text_input("Usuário (login)")
         pw    = st.text_input("Senha inicial", type="password")
         nome  = st.text_input("Nome Completo")
+        vbase = st.number_input("Salário Mensal (R$)", min_value=0.0, step=0.1, format="%.2f")
         adm   = st.checkbox("Administrador")
         ok    = st.form_submit_button("CRIAR", use_container_width=True)
     if ok:
         if not uname.strip() or not pw or not nome.strip():
             st.warning("Preencha todos os campos.")
-        elif database.create_user(uname.strip(), pw, nome.strip(), adm):
+        elif database.create_user(uname.strip(), pw, nome.strip(), adm, vbase):
             st.success("Usuário criado!")
             st.session_state.dlg_user_novo = False
             st.rerun()
@@ -183,6 +204,7 @@ def _dlg_editar_usuario():
     with st.form("frm_edit_user"):
         new_uname = st.text_input("Usuário",        value=d["user"])
         new_nome  = st.text_input("Nome Completo",  value=d["nome"])
+        new_vbase = st.number_input("Salário Mensal (R$)", value=float(d["valor_base"]), min_value=0.0, step=0.1, format="%.2f")
         new_adm   = st.checkbox("Administrador",    value=bool(d["admin"]))
         new_pw    = st.text_input("Nova Senha (em branco = manter)", type="password")
         c1, c2    = st.columns(2)
@@ -190,7 +212,7 @@ def _dlg_editar_usuario():
         cancelar  = c2.form_submit_button("CANCELAR", use_container_width=True)
     if salvar:
         if database.update_user(d["uid"], new_uname.strip(), new_nome.strip(),
-                                new_adm, new_pw or None):
+                                new_adm, new_vbase, new_pw or None):
             st.success("Atualizado!")
             st.session_state.dlg_user_editar = None
             st.rerun()
@@ -200,6 +222,37 @@ def _dlg_editar_usuario():
         st.session_state.dlg_user_editar = None
         st.rerun()
 
+@st.dialog("Editar Meu Perfil")
+def _dlg_editar_perfil():
+    u = st.session_state.user
+    is_admin = u.get("admin")
+    with st.form("frm_edit_self"):
+        # Usuários comuns não alteram login nem nome
+        if is_admin:
+            new_nome  = st.text_input("Nome Completo", value=u.get("nome"))
+            new_uname = st.text_input("Usuário (Login)", value=u.get("username"))
+        else:
+            st.info(f"Nome: {u.get('nome')}")
+            st.info(f"Usuário: {u.get('username')}")
+            new_nome  = u.get("nome")
+            new_uname = u.get("username")
+            
+        new_vbase = st.number_input("Salário Mensal (R$)", value=float(u.get("valor_base", 0.0)), min_value=0.0, step=0.1, format="%.2f")
+        new_pw    = st.text_input("Alterar Minha Senha (em branco = manter)", type="password")
+        c1, c2 = st.columns(2)
+        if c1.form_submit_button("SALVAR", use_container_width=True):
+            if database.update_user(u["id"], new_uname, new_nome, u["admin"], new_vbase, new_pw or None):
+                st.session_state.user["nome"] = new_nome
+                st.session_state.user["username"] = new_uname
+                st.session_state.user["valor_base"] = new_vbase
+                st.success("Perfil atualizado!")
+                st.session_state.dlg_perfil_editar = False
+                st.rerun()
+            else:
+                st.error("Erro ao salvar perfil.")
+        if c2.form_submit_button("FECHAR", use_container_width=True):
+            st.session_state.dlg_perfil_editar = False
+            st.rerun()
 
 @st.dialog("Editar Registro")
 def _dlg_editar_registro():
@@ -269,6 +322,8 @@ if st.session_state.dlg_user_novo:
     _dlg_novo_usuario()
 if st.session_state.dlg_user_editar is not None:
     _dlg_editar_usuario()
+if st.session_state.dlg_perfil_editar:
+    _dlg_editar_perfil()
 if st.session_state.dlg_reg_editar is not None:
     _dlg_editar_registro()
 if st.session_state.dlg_reg_deletar is not None:
@@ -280,7 +335,11 @@ if st.session_state.dlg_reg_deletar is not None:
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     u = st.session_state.user
-    st.markdown(f"### 👤 {u.get('nome', 'Usuário')}")
+    c1, c2 = st.columns([4, 1])
+    c1.markdown(f"### 👤 {u.get('nome', 'Usuário')}")
+    if c2.button("✏️", help="Editar perfil"):
+        st.session_state.dlg_perfil_editar = True
+        st.rerun()
 
     if st.button("Sair", use_container_width=True):
         for k in list(st.session_state.keys()):
@@ -300,19 +359,20 @@ with st.sidebar:
             rows  = database.get_all_chamados()
             df    = pd.DataFrame(
                 rows,
-                columns=["id","data","caso","pms","hotel","inicio","termino","observacoes"]
+                columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo"]
             )
             df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
             path  = f"folha_horas_{m_sel}_{a_sel}.pdf"
-            report_generator.gerar_pdf(df_ag, u["nome"], m_sel, str(a_sel), path)
+            report_generator.gerar_pdf(df_ag, u["nome"], m_sel, str(a_sel), u.get("valor_base", 0.0), path)
             with open(path, "rb") as fh:
                 st.session_state["pdf_bytes"] = fh.read()
             st.session_state["pdf_nome"] = path
-            # Limpeza imediata do arquivo temporário no servidor
-            import os
+            
+            # DELEÇÃO IMEDIATA: Remove o arquivo físico após carregar os bytes para a memória da sessão
             if os.path.exists(path):
                 os.remove(path)
-            st.success("✅ PDF gerado!")
+                
+            st.success("✅ PDF gerado e pronto para download!")
         except Exception as ex:
             import traceback
             st.error(f"Erro ao gerar PDF:\n{ex}")
@@ -338,80 +398,98 @@ st.markdown('<h1 class="page-title">CONTROLE DE HORAS EXTRAS</h1>', unsafe_allow
 h_rows = database.get_hoteis()
 h_opts = [f"{r} - {n}" for r, n in h_rows]
 
-TABS = st.tabs(["📝 Novo Registro", "📋 Histórico", "🏨 Hotéis", "⚙️ Usuários"])
+TABS_LIST = ["📝 Novo Registro", "📋 Histórico", "🏨 Hotéis", "⚙️ Usuários"]
+if st.session_state.user.get("admin"):
+    TABS_LIST.append("🔔 Aprovações")
+
+TABS = st.tabs(TABS_LIST)
 
 
 # ── ABA 0 – Novo Registro ─────────────────────────────────────────────────────
 with TABS[0]:
     st.subheader("Inserir Novo Chamado")
     with st.form("frm_novo_reg", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
-            f_data = st.date_input("Data do Atendimento", value=datetime.now())
-            # Campo INC opcional
+            f_data = st.date_input("Data do Atendimento", value=datetime.now(), format="DD/MM/YYYY")
             f_caso = st.text_input("Caso / INC", placeholder="Opcional")
+            f_hsel = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel…")
+            f_motivo = st.text_input("Motivo * (Uso Interno)", placeholder="Descreva o motivo do chamado...")
         with c2:
-            # Inicia em branco; filtra ao digitar
-            f_hsel = st.selectbox(
-                "Hotel / PMS",
-                options=h_opts,
-                index=None,
-                placeholder="Selecione ou busque o hotel…"
-            )
-        with c3:
-            # Máscara aplicada ao salvar (0800 → 08:00)
-            f_inicio = st.text_input("Início",  placeholder="08:00 ou 0800", value="")
-            f_fim    = st.text_input("Término", placeholder="17:00 ou 1730", value="")
-        f_obs = st.text_area("Observações", placeholder="Opcional")
+            f_inicio = st.text_input("Início *",  placeholder="08:00", value="")
+            f_fim    = st.text_input("Término *", placeholder="17:00", value="")
+            f_obs    = st.text_area("Observações (PDF)", placeholder="Opcional", height=138)
 
         if st.form_submit_button("💾 SALVAR", use_container_width=True):
-            if f_hsel is None:
-                st.error("Selecione um hotel antes de salvar.")
+            if not f_hsel or not f_inicio or not f_fim or not f_motivo.strip():
+                st.error("Campos obrigatórios: Hotel, Início, Término e Motivo.")
             else:
                 rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
-                ti = utils.processar_input_horario(f_inicio or "00:00")
-                tf = utils.processar_input_horario(f_fim    or "00:00")
+                ti = utils.processar_input_horario(f_inicio)
+                tf = utils.processar_input_horario(f_fim)
                 database.save_chamado(
                     f_data.strftime("%Y-%m-%d"),
                     f_caso.strip() or None,
                     rid_, hnome_, ti, tf,
                     f_obs.strip() or None,
+                    f_motivo.strip()
                 )
-                st.success(f"✅ Registrado — {hnome_} | {ti} → {tf}")
+                st.success(f"✅ Registrado!")
                 st.rerun()
 
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────
 with TABS[1]:
-    rows = database.get_all_chamados()
-    if rows:
-        # Tabela com botões de ação
-        cols = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1.2])
-        headers = ["Data", "Caso", "PMS", "Hotel", "Início", "Término", "Obs", "Ações"]
-        for col, h in zip(cols, headers):
-            col.markdown(f"**{h}**")
-        st.divider()
+    rows_all = database.get_all_chamados()
+    if rows_all:
+        # Filtros de Histórico
+        c_h1, c_h2 = st.columns(2)
+        with c_h1:
+            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=0)
+        with c_h2:
+            a_hist = st.number_input("Ano", value=datetime.now().year, step=1)
         
-        for r in rows:
-            # (id, data, caso, pms, hotel, inicio, termino, obs)
-            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1, 1, 1, 1.5, 1, 1, 1.5, 1.2])
-            dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
-            c1.write(dt_fmt)
-            c2.write(r[2] or "—")
-            c3.write(r[3] or "—")
-            c4.write(r[4] or "—")
-            c5.write(r[5])
-            c6.write(r[6])
-            c7.write(r[7] or "—")
+        # Lógica de Filtragem no Histórico
+        rows = []
+        for r in rows_all:
+            # id, data, caso, rid, hotel, inicio, termino, obs, motivo
+            dt_obj = datetime.strptime(r[1], "%Y-%m-%d")
+            if a_hist and dt_obj.year != a_hist:
+                continue
+            if m_hist != "TODOS":
+                meses = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
+                if meses[dt_obj.month - 1] != m_hist:
+                    continue
+            rows.append(r)
             
-            # Botões de ação
-            bt_ed, bt_del = c8.columns(2)
-            if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
-                st.session_state.dlg_reg_editar = r[0]
-                st.rerun()
-            if bt_del.button("🗑️", key=f"del_reg_{r[0]}", help="Excluir registro"):
-                st.session_state.dlg_reg_deletar = r[0]
-                st.rerun()
+        if rows:
+            # Tabela com botões de ação
+            cols = st.columns([1, 1, 1.8, 1, 1, 1.5, 1.2])
+            headers = ["Data", "Caso", "Hotel", "Início", "Término", "Obs", "Ações"]
+            for col, h in zip(cols, headers):
+                col.markdown(f"**{h}**")
+            st.divider()
+            
+            for r in rows:
+                # id, data, caso, pms, hotel, inicio, termino, obs, motivo
+                c1, c2, c4, c5, c6, c7, c8 = st.columns([1, 1, 1.8, 1, 1, 1.5, 1.2])
+                dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
+                c1.write(dt_fmt)
+                c2.write(r[2] or "—")
+                # Hotel formatado como RID - Nome
+                c4.write(f"{r[3]} - {r[4]}")
+                c5.write(r[5])
+                c6.write(r[6])
+                c7.write(r[7] or "—")
+                
+                # Botões de ação
+                bt_ed, bt_del = c8.columns(2)
+                if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
+                    st.session_state.dlg_reg_editar = r[0]
+                    st.rerun()
+                if bt_del.button("🗑️", key=f"del_reg_{r[0]}", help="Excluir registro"):
+                    st.session_state.dlg_reg_deletar = r[0]
+                    st.rerun()
     else:
         st.info("Nenhum registro encontrado.")
 
@@ -419,25 +497,26 @@ with TABS[1]:
 # ── ABA 2 – Hotéis ───────────────────────────────────────────────────────────
 with TABS[2]:
     st.subheader("Gestão de Hotéis")
-    if st.button("➕ Novo Hotel", type="primary"):
+    if st.button("➕ Sugerir Novo Hotel", type="primary"):
         st.session_state.dlg_hotel_novo = True
         st.rerun()
 
     if h_rows:
         c_cod, c_nom, c_ed, c_del = st.columns([1.2, 5, 0.6, 0.6])
-        c_cod.markdown("**Código**"); c_nom.markdown("**Nome**")
+        c_cod.markdown("**RID**"); c_nom.markdown("**Nome**")
         st.divider()
         for i, (r, n) in enumerate(h_rows):
             ca, cb, cc, cd = st.columns([1.2, 5, 0.6, 0.6])
             ca.write(r); cb.write(n)
-            if cc.button("✏️", key=f"edh_{i}", help="Editar hotel"):
+            if cc.button("✏️", key=f"edh_{i}", help="Sugerir alteração"):
                 st.session_state.dlg_hotel_editar = {"rid": r, "nome": n}
                 st.rerun()
-            if cd.button("🗑️", key=f"dlh_{i}", help="Excluir hotel"):
-                database.delete_hotel(r)
+            if cd.button("🗑️", key=f"dlh_{i}", help="Solicitar exclusão"):
+                database.criar_solicitacao_hotel(r, n, 'DELETE', st.session_state.user["id"])
+                st.info("Solicitação de exclusão enviada.")
                 st.rerun()
     else:
-        st.info("Nenhum hotel cadastrado.")
+        st.info("Nenhum hotel cadastrado ou aprovado.")
 
 
 # ── ABA 3 – Usuários ─────────────────────────────────────────────────────────
@@ -451,18 +530,43 @@ with TABS[3]:
         u_list = database.get_all_users()
         if u_list:
             st.divider()
-            for uid, uname, unom, uadm, umust in u_list:
-                cu, cn, cp, ce, cx = st.columns([1.5, 2.5, 1, 0.6, 0.6])
+            for uid, uname, unom, uadm, umust, uvb in u_list:
+                cu, cn, cp, ce, cr, cx = st.columns([1.5, 2.5, 1, 0.6, 0.6, 0.6])
                 cu.write(f"**{uname}**")
                 cn.write(unom or "—")
+                # Exibe perfil na lista
                 cp.write("🔴 Admin" if uadm else "🟢 User")
                 if ce.button("✏️", key=f"edu_{uid}", help="Editar"):
                     st.session_state.dlg_user_editar = {
-                        "uid": uid, "user": uname, "nome": unom, "admin": uadm
+                        "uid": uid, "user": uname, "nome": unom, "admin": uadm, "valor_base": uvb
                     }
                     st.rerun()
+                if cr.button("🔑", key=f"resetu_{uid}", help="Resetar Senha para 'mudar123'"):
+                    database.reset_password_admin(uid)
+                    st.success(f"Senha de {uname} resetada para 'mudar123'!")
                 if cx.button("🗑️", key=f"dlu_{uid}", help="Excluir"):
                     database.delete_user(uid)
                     st.rerun()
     else:
         st.info("Acesso restrito a administradores.")
+
+if st.session_state.user.get("admin"):
+    with TABS[4]:
+        st.subheader("🔔 Aprovações Pendentes (Hotéis)")
+        sols = database.get_solicitacoes_pendentes()
+        if sols:
+            c1, c2, c3, c4, c5 = st.columns([1, 2.5, 1, 2, 2])
+            c1.markdown("**RID**"); c2.markdown("**Nome**"); c3.markdown("**Ação**"); c4.markdown("**Usuário**")
+            st.divider()
+            for sid, srid, snome, stipo, sunom in sols:
+                ca, cb, cc, cd, ce = st.columns([1, 2.5, 1, 2, 2])
+                ca.write(srid); cb.write(snome); cc.write(stipo); cd.write(sunom)
+                bt_ap, bt_rj = ce.columns(2)
+                if bt_ap.button("✅", key=f"ap_{sid}"):
+                    database.processar_solicitacao(sid, True)
+                    st.rerun()
+                if bt_rj.button("❌", key=f"rj_{sid}"):
+                    database.processar_solicitacao(sid, False)
+                    st.rerun()
+        else:
+            st.info("Nenhuma solicitação pendente.")
