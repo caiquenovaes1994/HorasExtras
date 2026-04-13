@@ -1,5 +1,8 @@
 import sqlite3
 import os
+import shutil
+import glob
+from datetime import datetime
 import bcrypt
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
@@ -11,6 +14,7 @@ load_dotenv()
 
 DB_DIR  = "data"
 DB_NAME = os.path.join(DB_DIR, "horas_extras.db")
+BACKUP_DIR = os.path.join(DB_DIR, "backups")
 EXTERNAL_SOURCE = os.path.join(DB_DIR, "hotels_source.sqlite")
 
 # Chave Secreta para Criptografia de Dados (Salários)
@@ -68,6 +72,28 @@ def get_connection() -> sqlite3.Connection:
 # ─────────────────────────────────────────────────────────────────────────────
 # INICIALIZAÇÃO E MIGRAÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
+def executar_backup_automatico():
+    """Cria um backup do banco de dados mantendo apenas os 10 mais recentes."""
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            os.makedirs(BACKUP_DIR, exist_ok=True)
+            
+        if not os.path.exists(DB_NAME):
+            return
+            
+        agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bkp_path = os.path.join(BACKUP_DIR, f"backup_{agora}.db")
+        shutil.copy2(DB_NAME, bkp_path)
+        
+        bkps = sorted(glob.glob(os.path.join(BACKUP_DIR, "backup_*.db")))
+        if len(bkps) > 10:
+            para_deletar = bkps[:-10]
+            for f in para_deletar:
+                try: os.remove(f)
+                except: pass
+    except Exception as e:
+        print(f"Erro no backup automático: {e}")
+
 def init_db():
     conn   = get_connection()
     cursor = conn.cursor()
@@ -194,6 +220,7 @@ def processar_solicitacao(sid: int, aprovado: bool):
         else:
             cursor.execute("UPDATE solicitacoes_hoteis SET status = 'REJECTED' WHERE id = ?", (sid,))
     conn.commit(); conn.close()
+    executar_backup_automatico()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -287,6 +314,7 @@ def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, vbase_sna
         (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, _encrypt(vbase_snapshot))
     )
     conn.commit(); conn.close()
+    executar_backup_automatico()
 
 def get_all_chamados() -> list[tuple]:
     conn  = get_connection()
@@ -316,11 +344,21 @@ def update_chamado(cid, data, caso, rid, hotel, inicio, termino, obs, motivo):
     conn = get_connection()
     conn.execute("UPDATE chamados SET data=?, caso=?, pms=?, hotel=?, inicio=?, termino=?, observacoes=?, motivo=? WHERE id=?", (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, cid))
     conn.commit(); conn.close()
+    executar_backup_automatico()
 
 def delete_chamado(cid: int):
     conn = get_connection()
     conn.execute("DELETE FROM chamados WHERE id = ?", (cid,))
     conn.commit(); conn.close()
+    executar_backup_automatico()
+
+def delete_chamados_bulk(cids: list[int]):
+    if not cids: return
+    conn = get_connection()
+    conn.executemany("DELETE FROM chamados WHERE id = ?", [(cid,) for cid in cids])
+    conn.commit()
+    conn.close()
+    executar_backup_automatico()
 
 
 if __name__ == "__main__":

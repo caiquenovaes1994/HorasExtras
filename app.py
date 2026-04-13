@@ -84,6 +84,8 @@ _DEFAULTS: dict = {
     "dlg_reg_ver":        None,   # ID do registro
     "dlg_reg_editar":     None,   # ID do registro
     "dlg_reg_deletar":    None,   # ID do registro
+    "dlg_bulk_delete":    False,
+    "selected_records":   set(),
     # Campos do formulário de registro (Persistência)
     "reg_data":           datetime.now(),
     "reg_caso":           "",
@@ -359,6 +361,26 @@ def _dlg_editar_registro():
             st.session_state.dlg_reg_editar = None
             st.rerun()
 
+    if st.button("SINCRONIZAR ARQUIVO", use_container_width=True):
+        res = database.import_hotels_from_sqlite()
+        if "Erro" in res: st.error(res)
+        else: st.success(res)
+
+@st.dialog("Confirmar Exclusão em Massa")
+def _dlg_bulk_delete():
+    sel_count = len(st.session_state.selected_records)
+    st.warning(f"Tem certeza que deseja excluir {sel_count} registros selecionados? Esta ação não pode ser desfeita.")
+    cols = st.columns(2)
+    if cols[0].button("CANCELAR", use_container_width=True):
+        st.session_state.dlg_bulk_delete = False
+        st.rerun()
+    if cols[1].button("SIM, EXCLUIR", type="primary", use_container_width=True):
+        database.delete_chamados_bulk(list(st.session_state.selected_records))
+        st.session_state.selected_records.clear()
+        st.session_state.dlg_bulk_delete = False
+        st.success("Registros excluídos!")
+        st.rerun()
+
 
 @st.dialog("Confirmar Exclusão")
 def _dlg_confirmar_delecao():
@@ -392,6 +414,8 @@ if st.session_state.dlg_reg_deletar is not None:
     _dlg_confirmar_delecao()
 if st.session_state.dlg_reg_ver is not None:
     _dlg_visualizar_registro()
+if st.session_state.dlg_bulk_delete:
+    _dlg_bulk_delete()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -558,26 +582,40 @@ with TABS[1]:
             rows.append(r)
             
         if rows:
-            # Tabela com botões de ação
-            cols = st.columns([1, 1, 1.8, 1, 1, 1.2, 1.6])
-            headers = ["Data", "Caso", "Hotel", "Início", "Término", "Observações", "Ações"]
+            sel_count = len(st.session_state.selected_records)
+            if st.button(f"🗑️ Deletar {sel_count} selecionado(s)" if sel_count > 0 else "🗑️ Deletar Selecionados", disabled=(sel_count == 0)):
+                st.session_state.dlg_bulk_delete = True
+                st.rerun()
+                
+            cols = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
+            headers = ["", "Data", "Caso", "Hotel", "Início", "Término", "Observações", "Ações"]
             for col, h in zip(cols, headers):
                 col.markdown(f"**{h}**")
             st.divider()
             
+            def bind_checkbox(r_id):
+                key = f"chk_{r_id}"
+                if st.session_state[key]:
+                    st.session_state.selected_records.add(r_id)
+                else:
+                    st.session_state.selected_records.discard(r_id)
+            
             for r in rows:
-                # id, data, caso, pms, hotel, inicio, termino, obs, motivo
-                c1, c2, c4, c5, c6, c7, c8 = st.columns([1, 1, 1.8, 1, 1, 1.2, 1.6])
+                c0, c1, c2, c4, c5, c6, c7, c8 = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
+                rid = r[0]
+                
+                # Checkbox sync
+                chk_key = f"chk_{rid}"
+                c0.checkbox(" ", key=chk_key, value=(rid in st.session_state.selected_records), on_change=bind_checkbox, args=(rid,), label_visibility="collapsed")
+                
                 dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
                 c1.write(dt_fmt)
                 c2.write(r[2] or "—")
-                # Hotel formatado como RID - Nome
                 c4.write(f"{r[3]} - {r[4]}")
                 c5.write(r[5])
                 c6.write(r[6])
                 c7.write(r[7] or "—")
                 
-                # Botões de ação
                 bt_ver, bt_ed, bt_del = c8.columns(3)
                 if bt_ver.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar registro"):
                     st.session_state.dlg_reg_ver = r[0]

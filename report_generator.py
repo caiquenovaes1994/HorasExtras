@@ -79,7 +79,7 @@ def _to_td(s: str) -> timedelta:
 # ─────────────────────────────────────────────────────────────────────────────
 # GERADOR PRINCIPAL
 # ─────────────────────────────────────────────────────────────────────────────
-def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
+def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
               ano: str, valor_base: float, output_path: str = "folha_horas.pdf") -> str:
     
     pts_cm = 28.35
@@ -103,17 +103,23 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
         alignment=1, # CENTER
         spaceAfter=10,
     )
-    elems.append(Paragraph("FOLHA DE HORA EXTRA", title_style))
+    elems.append(Paragraph("<b>FOLHA DE HORA EXTRA</b>", title_style))
 
     # ── Cabeçalho (Inter 7) ───────────────────────────────────────────────
     hdr_data = [
-        ["COLABORADOR:", colaborador.upper(), "MÊS:", mes.upper(), "ANO:", ano]
+        ["PLANTONISTA:", plantonista.upper(), "MÊS:", mes.upper(), "ANO:", ano]
     ]
-    # Útil A4L: 29.7 - 1.8*2 = 26.1 cm
-    hdr_widths = [4.0*cm, 10.0*cm, 2.0*cm, 6.0*cm, 2.0*cm, 2.1*cm]
+    # Útil A4L: 29.7 - 1.8*2 = 26.1 cm (Mantido a proporção e width para a página renderizar cheia sem desalinhar a main grid)
+    hdr_widths = [2.5*cm, 10.0*cm, 1.2*cm, 4.0*cm, 1.2*cm, 7.2*cm]
     hdr_table  = Table(hdr_data, colWidths=hdr_widths)
     hdr_table.setStyle(TableStyle([
-        ("FONTNAME",   (0, 0), (-1, -1), DEFAULT_FONT_BOLD),
+        ("FONTNAME",   (0, 0), (0, 0), DEFAULT_FONT_BOLD),
+        ("FONTNAME",   (2, 0), (2, 0), DEFAULT_FONT_BOLD),
+        ("FONTNAME",   (4, 0), (4, 0), DEFAULT_FONT_BOLD),
+        ("FONTNAME",   (1, 0), (1, 0), DEFAULT_FONT),
+        ("FONTNAME",   (3, 0), (3, 0), DEFAULT_FONT),
+        ("FONTNAME",   (5, 0), (5, 0), DEFAULT_FONT),
+        ("BOX",        (0, 0), (-1, -1), 0.5, BLACK),
         ("FONTSIZE",   (0, 0), (-1, -1), 7),
         ("ALIGN",      (0, 0), (-1, -1), "LEFT"),
         ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
