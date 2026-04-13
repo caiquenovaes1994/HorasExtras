@@ -99,16 +99,57 @@ def agrupar_por_data(df, mes_ref, ano_ref):
         
         df['valor_base_snapshot'] = pd.to_numeric(df['valor_base_snapshot'], errors='coerce').fillna(0.0)
         
-        grouped = df.groupby('data').agg({
-            'inicio': 'min', 'termino': 'max',
-            'caso': lambda x: ', '.join(sorted(list(set([str(i) for i in x if i])))),
-            'observacoes': lambda x: ' | '.join([str(i) for i in x if i]),
-            'valor_base_snapshot': 'max'
-        }).reset_index()
+        def process_day(g):
+            g = g.sort_values("inicio")
+            horarios = []
+            duracao_total = timedelta(0)
+            obs = []
+            casos = set()
+            vbs = 0.0
+            
+            for _, row in g.iterrows():
+                ti = str(row.get('inicio', ''))
+                tf = str(row.get('termino', ''))
+                if ti and tf and ti != 'nan' and tf != 'nan':
+                    horarios.append(f"{ti} - {tf}")
+                    duracao_total += calcular_duracao(ti, tf)
+                
+                c = str(row.get('caso', ''))
+                if c and c.strip() and c.lower() != 'nan' and c.lower() != 'none':
+                    casos.add(c.strip())
+                
+                o = str(row.get('observacoes', ''))
+                if o and o.strip() and o.lower() != 'nan' and o.lower() != 'none':
+                    obs.append(o.strip())
+                
+                v = float(row.get('valor_base_snapshot', 0.0))
+                if v > vbs:
+                    vbs = v
+            
+            p1 = horarios[0] if len(horarios) > 0 else ""
+            p2 = horarios[1] if len(horarios) > 1 else ""
+            p3 = horarios[2] if len(horarios) > 2 else ""
+            
+            overflow = horarios[3:]
+            if overflow:
+                overflow_str = "Extras: " + "; ".join(overflow)
+                obs.insert(0, overflow_str)
+            
+            return pd.Series({
+                'p1': p1,
+                'p2': p2,
+                'p3': p3,
+                'caso': ', '.join(sorted(list(casos))),
+                'observacoes': ' | '.join(obs),
+                'valor_base_snapshot': vbs,
+                'duracao_td': duracao_total
+            })
+
+        grouped = df.groupby('data').apply(process_day, include_groups=False).reset_index()
         df_agrupado = pd.merge(df_base, grouped, on='data', how='left').fillna("")
+        df_agrupado['duracao_td'] = df_agrupado['duracao_td'].apply(lambda x: x if pd.notnull(x) and x != "" else timedelta(0))
     
     df_agrupado['semana'] = df_agrupado['data'].apply(get_dia_semana)
-    df_agrupado['duracao_td'] = df_agrupado.apply(lambda x: calcular_duracao(x['inicio'], x['termino']), axis=1)
     df_agrupado['horas_trabalhadas'] = df_agrupado['duracao_td'].apply(formatar_timedelta)
     
     def calc_percentual(row):

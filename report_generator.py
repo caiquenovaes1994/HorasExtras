@@ -126,7 +126,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     # ── Tabela de Dados ──────────────────────────────────────────────────────
     COL_HDR = [
         "DIA", "SEMANA", "DATA",
-        "INÍCIO", "INTERVALO", "VOLTA", "TÉRMINO",
+        "PLANTÃO1", "PLANTÃO2", "PLANTÃO3",
         "HORAS", "50 %", "100 %", "OBSERVAÇÕES"
     ]
 
@@ -150,10 +150,9 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
             _clean(row["data"].strftime("%d")),
             _clean(semana),
             _clean(row["data"].strftime("%d/%m/%Y")),
-            _clean(row["inicio"]),
-            "", # Intervalo
-            "", # Volta
-            _clean(row["termino"]),
+            _clean(row.get("p1")),
+            _clean(row.get("p2")),
+            _clean(row.get("p3")),
             _clean(row["horas_trabalhadas"]),
             _clean(row["50%"]),
             _clean(row["100%"]),
@@ -186,7 +185,7 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
             val_tot_100 += (t100.total_seconds() / 3600.0) * row_vhora * 2.0
 
     footer = [
-        "", "", "", "", "", "", "TOTAL:",
+        "", "", "", "", "", "TOTAL:",
         formatar_timedelta(total_worked),
         formatar_timedelta(total_50),
         formatar_timedelta(total_100),
@@ -205,16 +204,15 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     # Larguras colunas (Soma = 26.1cm)
     col_w = [
         1.2*cm, # Dia
-        3.8*cm, # Semana
-        2.8*cm, # Data
-        1.5*cm, # Início
-        1.5*cm, # Int
-        1.5*cm, # Vol
-        1.5*cm, # Tér
+        3.4*cm, # Semana
+        2.6*cm, # Data
+        2.2*cm, # P1
+        2.2*cm, # P2
+        2.2*cm, # P3
         2.0*cm, # Horas
         1.5*cm, # 50
         1.5*cm, # 100
-        7.3*cm  # Obs (-10%)
+        7.3*cm  # Obs
     ]
 
     main_table = Table(full_data, colWidths=col_w, rowHeights=[row_h]*n_lines)
@@ -236,9 +234,9 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
         ts.append(("BACKGROUND", (0, idx), (-1, idx), GRAY_ROW))
 
     # Estilo Rodapé Total
-    ts.append(("FONTNAME", (6, -1), (9, -1), DEFAULT_FONT_BOLD))
-    ts.append(("BACKGROUND", (6, -1), (9, -1), WINE))
-    ts.append(("TEXTCOLOR",  (6, -1), (9, -1), WHITE))
+    ts.append(("FONTNAME", (5, -1), (8, -1), DEFAULT_FONT_BOLD))
+    ts.append(("BACKGROUND", (5, -1), (8, -1), WINE))
+    ts.append(("TEXTCOLOR",  (5, -1), (8, -1), WHITE))
 
     # Forçar centro total para dados (incluindo Observação a pedido do usuário)
     ts.append(("ALIGN", (0, 1), (-1, -1), "CENTER"))
