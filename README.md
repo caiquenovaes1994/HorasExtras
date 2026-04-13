@@ -42,7 +42,7 @@ O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do
 ### Gestão de Hotéis / PMS
 
 - Cadastro e edição de hotéis via **janela modal** (`st.dialog`)
-- Sincronização automática com bases de dados externas
+- **Base Externa Opcional:** O sistema referencia um arquivo `data/hotels_source.sqlite` para carregar clientes massificados. Caso o arquivo não exista após o clone, o sistema opera 100% de maneira autônoma com seus hotéis inseridos manualmente.
 - Garantia de registros únicos com `SELECT DISTINCT` (sem duplicações)
 
 ### Gestão de Usuários (Admin)
@@ -65,7 +65,7 @@ O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do
 
 - **Calendário completo**: exibe todos os dias do período (26 do mês anterior ao 25 do mês atual), mesmo os sem registro
 - Destaque automático com **fundo cinza (#D3D3D3)** em Sábados, Domingos e Feriados
-- Cálculo automático de faturamento iterado (linha a linha) baseando-se nas regras de divisores legais para horas de **50%** (dias úteis) e **100%** (fins de semana exclusivos/feriados).
+- Cálculo automático de faturamento iterado (linha a linha) baseando-se nas regras de divisores legais para horas de **50%** (dias úteis e sábados) e **100%** (domingos e feriados).
 - Ajuste automático para caber em **uma única página A4**
 - Cabeçalho profissional com destaque em cor vinho corporativa
 
@@ -110,14 +110,25 @@ HorasExtras/
 
 ### Passo a Passo
 
-**1. Clone o repositório:**
+#### 1. Clone o repositório
 
 ```bash
 git clone https://github.com/caiquenovaes1994/HorasExtras.git
 cd HorasExtras
 ```
 
-**2. Execute o script de inicialização:**
+#### 2. Configuração de Ambiente (.env)
+
+Crie um arquivo `.env` na raiz do projeto com as seguintes chaves de ambiente vitais:
+
+```env
+SECRET_KEY=sua_chave_fernet_aqui
+ADMIN_PWD=sua_senha_admin_inicial
+```
+
+> **Nota:** A `SECRET_KEY` deve ser obrigatoriamente um token de 32 bytes extraído via algoritmo AES suportado pelo módulo de encriptação Python local.
+
+#### 3. Execute o script de inicialização
 
 O arquivo `start.bat` automatiza todo o processo: cria o ambiente virtual, instala as dependências e inicia o servidor.
 
@@ -125,7 +136,7 @@ O arquivo `start.bat` automatiza todo o processo: cria o ambiente virtual, insta
 ./start.bat
 ```
 
-**3. Acesse a aplicação no navegador:**
+#### 4. Acesse a aplicação no navegador
 
 ```text
 http://localhost:3003
