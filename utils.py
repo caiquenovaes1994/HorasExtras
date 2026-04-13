@@ -92,14 +92,18 @@ def agrupar_por_data(df, mes_ref, ano_ref):
     
     if df.empty:
         df_agrupado = df_base
-        for col in ['inicio', 'termino', 'caso', 'observacoes']: df_agrupado[col] = ""
+        for col in ['inicio', 'termino', 'caso', 'observacoes', 'valor_base_snapshot']: df_agrupado[col] = ""
     else:
         df['data'] = pd.to_datetime(df['data'])
         df = df[(df['data'] >= inicio_p) & (df['data'] <= fim_p)]
+        
+        df['valor_base_snapshot'] = pd.to_numeric(df['valor_base_snapshot'], errors='coerce').fillna(0.0)
+        
         grouped = df.groupby('data').agg({
             'inicio': 'min', 'termino': 'max',
             'caso': lambda x: ', '.join(sorted(list(set([str(i) for i in x if i])))),
-            'observacoes': lambda x: ' | '.join([str(i) for i in x if i])
+            'observacoes': lambda x: ' | '.join([str(i) for i in x if i]),
+            'valor_base_snapshot': 'max'
         }).reset_index()
         df_agrupado = pd.merge(df_base, grouped, on='data', how='left').fillna("")
     

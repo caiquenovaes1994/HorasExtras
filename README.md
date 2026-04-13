@@ -1,5 +1,3 @@
-<div align="center">
-
 # ⏱️ Controle de Horas Extras
 
 **Sistema profissional para gestão de atendimentos e controle de horas extras com geração de relatórios PDF de alta fidelidade.**
@@ -10,23 +8,21 @@
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-</div>
+---
+
+## Índice
+
+- [Sobre o Projeto](#sobre-o-projeto)
+- [Funcionalidades](#funcionalidades)
+- [Tecnologias](#tecnologias)
+- [Estrutura do Projeto](#estrutura-do-projeto)
+- [Instalação e Execução](#instalação-e-execução)
+- [Uso](#uso)
+- [Autor](#autor)
 
 ---
 
-## 📋 Índice
-
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Funcionalidades](#-funcionalidades)
-- [Tecnologias](#-tecnologias)
-- [Estrutura do Projeto](#-estrutura-do-projeto)
-- [Instalação e Execução](#-instalação-e-execução)
-- [Uso](#-uso)
-- [Autor](#-autor)
-
----
-
-## 💡 Sobre o Projeto
+## Sobre o Projeto
 
 O **Controle de Horas Extras** é uma aplicação web desenvolvida com **Python e Streamlit** para automatizar o processo de registro, acompanhamento e validação de atendimentos realizados fora do expediente padrão.
 
@@ -34,40 +30,49 @@ O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do
 
 ---
 
-## ✅ Funcionalidades
+## Funcionalidades
 
-### 🔐 Autenticação e Segurança
-- Login multiusuário com senhas protegidas por **hash SHA-256**
-- Perfis de acesso: **Administrador** e **Usuário comum**
-- Fluxo de **troca de senha obrigatória** no primeiro acesso de novos usuários
+### Autenticação e Segurança
 
-### 🏨 Gestão de Hotéis / PMS
+- Segurança rigorosa nos logs com algoritmos **hash bcrypt** (senha) escaláveis.
+- Proteção nativa de informações sensíveis (como salários base) por **Criptografia Simétrica (AES / Fernet)** para adequações diretas de LGPD.
+- Distinção em operações entre perfis de **Administrador** da plataforma e **Usuário comum**.
+- **Troca de Senha Obrigatória** disparada nativamente no início de sessão de novos convidados/colegas na plataforma.
+
+### Gestão de Hotéis / PMS
+
 - Cadastro e edição de hotéis via **janela modal** (`st.dialog`)
 - Sincronização automática com bases de dados externas
 - Garantia de registros únicos com `SELECT DISTINCT` (sem duplicações)
 
-### 👤 Gestão de Usuários (Admin)
+### Gestão de Usuários (Admin)
+
 - **CRUD completo** de usuários em interface modal dedicada
 - Definição de perfil administrador diretamente na criação
 
-### 📝 Registro de Atendimentos
+### Trava de Base Financeira (Salário)
+
+- **Captura via Snapshot:** Salários diários são individualmente capturados de forma cifrada atrelados a cada entrada gerada pelo colaborador.  
+- **Redução de Impacto de Ajuste:** Reajustes salariais (aumentos e dissídios) de perfil em tempo-real não afetam a emissão e integridade PDF calculada de meses anteriores do histórico de remuneração.
+
+### Registro de Atendimentos
+
 - Máscara de horário automática (ex: digitando `0730` → converte para `07:30`)
 - Campo Caso/INC **opcional**
 - Seleção dinâmica de Hotel/PMS populada diretamente do banco de dados
 
-### 📄 Relatório PDF de Alta Fidelidade
+### Relatório PDF de Alta Fidelidade
+
 - **Calendário completo**: exibe todos os dias do período (26 do mês anterior ao 25 do mês atual), mesmo os sem registro
 - Destaque automático com **fundo cinza (#D3D3D3)** em Sábados, Domingos e Feriados
-- Cálculo automático de horas em **50%** (dias úteis) e **100%** (fins de semana/feriados)
+- Cálculo automático de faturamento iterado (linha a linha) baseando-se nas regras de divisores legais para horas de **50%** (dias úteis) e **100%** (fins de semana exclusivos/feriados).
 - Ajuste automático para caber em **uma única página A4**
 - Cabeçalho profissional com destaque em cor vinho corporativa
 
----
-
-## 🛠️ Tecnologias
+## Tecnologias
 
 | Tecnologia | Versão | Finalidade |
-|---|---|---|
+| :--- | :--- | :--- |
 | [Python](https://python.org) | 3.12 | Linguagem principal |
 | [Streamlit](https://streamlit.io) | 1.56 | Interface web |
 | [SQLite](https://sqlite.org) | — | Banco de dados local |
@@ -77,9 +82,9 @@ O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do
 
 ---
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
-```
+```text
 HorasExtras/
 │
 ├── app.py               # Interface principal (Streamlit)
@@ -97,14 +102,16 @@ HorasExtras/
 
 ---
 
-## 📦 Instalação e Execução
+## Instalação e Execução
 
 ### Pré-requisitos
+
 - [Python 3.10+](https://www.python.org/downloads/) instalado e disponível no `PATH`
 
 ### Passo a Passo
 
 **1. Clone o repositório:**
+
 ```bash
 git clone https://github.com/caiquenovaes1994/HorasExtras.git
 cd HorasExtras
@@ -119,7 +126,8 @@ O arquivo `start.bat` automatiza todo o processo: cria o ambiente virtual, insta
 ```
 
 **3. Acesse a aplicação no navegador:**
-```
+
+```text
 http://localhost:3003
 ```
 
@@ -127,7 +135,7 @@ http://localhost:3003
 
 ---
 
-## 🖥️ Uso
+## Uso
 
 1. **Faça login** com as suas credenciais.
 2. Na aba **"📝 Novo Registro"**, registre o atendimento informando data, hotel, horários e o caso/INC (opcional).
@@ -136,14 +144,13 @@ http://localhost:3003
 
 ---
 
-## 👤 Autor
+## Autor
 
-**Caique Novaes**
+Desenvolvido por **Caique Novaes**
+
 - E-mail: [caiquenovaes1994@gmail.com](mailto:caiquenovaes1994@gmail.com)
 - GitHub: [@caiquenovaes1994](https://github.com/caiquenovaes1994)
 
 ---
 
-<div align="center">
-  <sub>Desenvolvido com ☕ e Python · 2026</sub>
-</div>
+Desenvolvido com ☕ e Python · 2026

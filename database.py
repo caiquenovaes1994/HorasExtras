@@ -35,6 +35,19 @@ def _decrypt(token: str) -> float:
     except:
         return 0.0
 
+def encrypt_str(val: str) -> str:
+    """Criptografa uma string pura."""
+    if not _cipher or not val: return ""
+    return _cipher.encrypt(val.encode()).decode()
+
+def decrypt_str(token: str) -> str:
+    """Descriptografa uma string pura."""
+    if not _cipher or not token: return ""
+    try:
+        return _cipher.decrypt(token.encode()).decode()
+    except:
+        return ""
+
 def _hash_pw(password: str) -> str:
     """Gera um hash seguro usando Bcrypt."""
     salt = bcrypt.gensalt()
@@ -122,6 +135,10 @@ def init_db():
         cursor.execute("ALTER TABLE chamados ADD COLUMN motivo TEXT")
     except: pass
 
+    try:
+        cursor.execute("ALTER TABLE chamados ADD COLUMN valor_base_snapshot TEXT DEFAULT '0.0'")
+    except: pass
+
     conn.commit()
     conn.close()
     
@@ -197,6 +214,21 @@ def verify_login(username: str, password: str) -> dict | None:
         }
     return None
 
+def get_user_by_username(username: str) -> dict | None:
+    conn = get_connection()
+    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base FROM usuarios WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    if row:
+        return {
+            "id":          row[0],
+            "username":    row[1],
+            "nome":        row[3],
+            "admin":       bool(row[4]),
+            "must_change": bool(row[5]),
+            "valor_base":  _decrypt(row[6])
+        }
+    return None
+
 def get_all_users() -> list[tuple]:
     conn  = get_connection()
     rows  = conn.execute("SELECT id, username, nome_completo, is_admin, must_change_password, valor_base FROM usuarios ORDER BY nome_completo COLLATE NOCASE").fetchall()
@@ -248,22 +280,37 @@ def delete_user(uid: int):
 # ─────────────────────────────────────────────────────────────────────────────
 # CHAMADOS — CRUD
 # ─────────────────────────────────────────────────────────────────────────────
-def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo):
+def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, vbase_snapshot: float = 0.0):
     conn = get_connection()
-    conn.execute("INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo))
+    conn.execute(
+        "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, _encrypt(vbase_snapshot))
+    )
     conn.commit(); conn.close()
 
 def get_all_chamados() -> list[tuple]:
     conn  = get_connection()
-    rows  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo FROM chamados ORDER BY data ASC, inicio ASC").fetchall()
+    rows  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot FROM chamados ORDER BY data ASC, inicio ASC").fetchall()
     conn.close()
-    return rows
+    
+    res = []
+    for r in rows:
+        vbs = 0.0
+        if len(r) > 9 and r[9]:
+            vbs = _decrypt(r[9])
+        res.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], vbs))
+    return res
 
 def get_chamado_by_id(cid: int) -> tuple | None:
     conn = get_connection()
-    row  = conn.execute("SELECT * FROM chamados WHERE id = ?", (cid,)).fetchone()
+    row  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot FROM chamados WHERE id = ?", (cid,)).fetchone()
     conn.close()
-    return row
+    if row:
+        vbs = 0.0
+        if len(row) > 9 and row[9]:
+            vbs = _decrypt(row[9])
+        return (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], vbs)
+    return None
 
 def update_chamado(cid, data, caso, rid, hotel, inicio, termino, obs, motivo):
     conn = get_connection()

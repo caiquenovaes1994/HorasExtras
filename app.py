@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas    as pd
-from datetime    import datetime
+from datetime    import datetime, timedelta
 import os
+import extra_streamlit_components as stx
 
 import database
 import utils
@@ -18,6 +19,9 @@ def _init_db_once():
     database.init_db()
 
 _init_db_once()
+
+# Inicializa o CookieManager do extra-streamlit-components
+cookie_manager = stx.CookieManager()
 
 st.markdown("""
 <style>
@@ -77,6 +81,7 @@ _DEFAULTS: dict = {
     "dlg_user_novo":      False,
     "dlg_user_editar":    None,   # {"uid": …, "user": …, "nome": …, "admin": …, "valor_base": …}
     "dlg_perfil_editar":  False,
+    "dlg_reg_ver":        None,   # ID do registro
     "dlg_reg_editar":     None,   # ID do registro
     "dlg_reg_deletar":    None,   # ID do registro
     # Campos do formulário de registro (Persistência)
@@ -93,6 +98,17 @@ for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
+# Lógica do Auto-Login por Cookies
+auth_token = cookie_manager.get(cookie="auth_token")
+if not st.session_state.logged_in and auth_token:
+    username = database.decrypt_str(auth_token)
+    if username:
+        user_data = database.get_user_by_username(username)
+        if user_data:
+            st.session_state.logged_in = True
+            st.session_state.user = user_data
+            # A página já carrega e renderiza na sequência normal. Removido o rerun para não encavalar com component return.
+
 # Valida integridade da sessão (protege contra versões antigas no cache)
 if st.session_state.logged_in and (
     not isinstance(st.session_state.user, dict)
@@ -100,6 +116,7 @@ if st.session_state.logged_in and (
 ):
     st.session_state.logged_in = False
     st.session_state.user      = None
+    cookie_manager.delete("auth_token")
     st.rerun()
 
 
@@ -119,6 +136,12 @@ if not st.session_state.logged_in:
                 if u:
                     st.session_state.logged_in = True
                     st.session_state.user      = u
+                    
+                    # Salva cookie gerando um token seguro válido por 24 horas
+                    token = database.encrypt_str(u["username"])
+                    expires = datetime.now() + timedelta(hours=24)
+                    cookie_manager.set("auth_token", token, expires_at=expires)
+                    
                     st.rerun()
                 else:
                     st.error("Usuário ou senha inválidos.")
@@ -263,6 +286,35 @@ def _dlg_editar_perfil():
             st.session_state.dlg_perfil_editar = False
             st.rerun()
 
+@st.dialog("Visualizar Detalhes do Registro")
+def _dlg_visualizar_registro():
+    cid = st.session_state.dlg_reg_ver
+    row = database.get_chamado_by_id(cid)
+    if not row:
+        st.error("Registro não encontrado.")
+        if st.button("FECHAR"):
+            st.session_state.dlg_reg_ver = None
+            st.rerun()
+        return
+
+    dt_obj = datetime.strptime(row[1], "%Y-%m-%d")
+    data_fmt = dt_obj.strftime("%d/%m/%Y")
+    dia_sem = utils.get_dia_semana(dt_obj)
+    
+    st.text_input("Data e Dia da Semana", value=f"{data_fmt} - {dia_sem.title()}", disabled=True)
+    st.text_input("Hotel", value=f"{row[3]} - {row[4]}", disabled=True)
+    
+    c1, c2 = st.columns(2)
+    c1.text_input("Início", value=row[5], disabled=True)
+    c2.text_input("Término", value=row[6], disabled=True)
+    
+    st.text_input("Motivo", value=row[8] or "", disabled=True)
+    st.text_area("Observações", value=row[7] or "", disabled=True)
+    
+    if st.button("FECHAR", use_container_width=True):
+        st.session_state.dlg_reg_ver = None
+        st.rerun()
+
 @st.dialog("Editar Registro")
 def _dlg_editar_registro():
     cid = st.session_state.dlg_reg_editar
@@ -291,6 +343,7 @@ def _dlg_editar_registro():
         c1, c2 = st.columns(2)
         f_inicio = c1.text_input("Início", value=row[5])
         f_fim    = c2.text_input("Término", value=row[6])
+        f_motivo = st.text_input("Motivo", value=row[8] or "")
         f_obs    = st.text_area("Observações", value=row[7] or "")
         
         cb1, cb2 = st.columns(2)
@@ -298,7 +351,7 @@ def _dlg_editar_registro():
             rid_, hnome_ = (f_hsel.split(" - ", 1) if f_hsel and " - " in f_hsel else ("", f_hsel))
             database.update_chamado(cid, f_data.strftime("%Y-%m-%d"), f_caso.strip(), rid_, hnome_, 
                                     utils.processar_input_horario(f_inicio), 
-                                    utils.processar_input_horario(f_fim), f_obs.strip())
+                                    utils.processar_input_horario(f_fim), f_obs.strip(), f_motivo.strip())
             st.success("Atualizado!")
             st.session_state.dlg_reg_editar = None
             st.rerun()
@@ -337,6 +390,8 @@ if st.session_state.dlg_reg_editar is not None:
     _dlg_editar_registro()
 if st.session_state.dlg_reg_deletar is not None:
     _dlg_confirmar_delecao()
+if st.session_state.dlg_reg_ver is not None:
+    _dlg_visualizar_registro()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -351,6 +406,7 @@ with st.sidebar:
         st.rerun()
 
     if st.button("Sair", use_container_width=True):
+        cookie_manager.delete("auth_token")
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
@@ -368,7 +424,7 @@ with st.sidebar:
             rows  = database.get_all_chamados()
             df    = pd.DataFrame(
                 rows,
-                columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo"]
+                columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot"]
             )
             df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
             path  = f"folha_horas_{m_sel}_{a_sel}.pdf"
@@ -434,11 +490,11 @@ with TABS[0]:
             f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
             f_caso   = st.text_input("Caso / INC", placeholder="Opcional", key="reg_caso")
             f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Opcional: Selecione ou busque o hotel…", key="reg_hotel")
-            f_motivo = st.text_input("Motivo * (Uso Interno)", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
+            f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
         with c2:
             f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
             f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
-            f_obs     = st.text_area("Observações (PDF)", placeholder="Opcional", height=138, key="reg_obs")
+            f_obs     = st.text_area("Observações", placeholder="Opcional", height=138, key="reg_obs")
 
         if st.form_submit_button("💾 SALVAR", use_container_width=True):
             if not f_inicio or not f_fim or not f_motivo.strip():
@@ -451,12 +507,14 @@ with TABS[0]:
                     
                     ti = utils.processar_input_horario(f_inicio)
                     tf = utils.processar_input_horario(f_fim)
+                    vbase_atual = float(st.session_state.user.get("valor_base", 0.0))
                     database.save_chamado(
                         f_data.strftime("%Y-%m-%d"),
                         f_caso.strip() or None,
                         rid_, hnome_, ti, tf,
                         f_obs.strip() or None,
-                        f_motivo.strip()
+                        f_motivo.strip(),
+                        vbase_atual
                     )
                     st.success(f"✅ Registrado!")
                     # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
@@ -472,35 +530,44 @@ with TABS[1]:
     if rows_all:
         # Filtros de Histórico
         c_h1, c_h2 = st.columns(2)
+        mes_atual_idx = datetime.now().month
         with c_h1:
-            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=0)
+            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual_idx)
         with c_h2:
-            a_hist = st.number_input("Ano", value=datetime.now().year, step=1)
+            a_hist = st.number_input("Ano", min_value=2024, max_value=2050, value=datetime.now().year, step=1)
         
-        # Lógica de Filtragem no Histórico
+        # Lógica de Filtragem no Histórico (Ciclo de Competência)
+        if m_hist != "TODOS":
+            inicio_comp, fim_comp = utils.obter_faixa_periodo(m_hist, a_hist)
+            st.caption(f"Exibindo período de competência: **{inicio_comp.strftime('%d/%m/%Y')}** a **{fim_comp.strftime('%d/%m/%Y')}**")
+
         rows = []
         for r in rows_all:
-            # id, data, caso, rid, hotel, inicio, termino, obs, motivo
+            # r: id, data, caso, rid, hotel, inicio, termino, obs, motivo, ...
             dt_obj = datetime.strptime(r[1], "%Y-%m-%d")
-            if a_hist and dt_obj.year != a_hist:
-                continue
+            
             if m_hist != "TODOS":
-                meses = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
-                if meses[dt_obj.month - 1] != m_hist:
+                # Filtra estritamente dentro da faixa de competência
+                if not (inicio_comp <= dt_obj <= fim_comp):
                     continue
+            else:
+                # Se for TODOS, filtra apenas pelo Ano
+                if a_hist and dt_obj.year != a_hist:
+                    continue
+            
             rows.append(r)
             
         if rows:
             # Tabela com botões de ação
-            cols = st.columns([1, 1, 1.8, 1, 1, 1.5, 1.2])
-            headers = ["Data", "Caso", "Hotel", "Início", "Término", "Obs", "Ações"]
+            cols = st.columns([1, 1, 1.8, 1, 1, 1.2, 1.6])
+            headers = ["Data", "Caso", "Hotel", "Início", "Término", "Observações", "Ações"]
             for col, h in zip(cols, headers):
                 col.markdown(f"**{h}**")
             st.divider()
             
             for r in rows:
                 # id, data, caso, pms, hotel, inicio, termino, obs, motivo
-                c1, c2, c4, c5, c6, c7, c8 = st.columns([1, 1, 1.8, 1, 1, 1.5, 1.2])
+                c1, c2, c4, c5, c6, c7, c8 = st.columns([1, 1, 1.8, 1, 1, 1.2, 1.6])
                 dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
                 c1.write(dt_fmt)
                 c2.write(r[2] or "—")
@@ -511,7 +578,10 @@ with TABS[1]:
                 c7.write(r[7] or "—")
                 
                 # Botões de ação
-                bt_ed, bt_del = c8.columns(2)
+                bt_ver, bt_ed, bt_del = c8.columns(3)
+                if bt_ver.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar registro"):
+                    st.session_state.dlg_reg_ver = r[0]
+                    st.rerun()
                 if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
                     st.session_state.dlg_reg_editar = r[0]
                     st.rerun()

@@ -127,12 +127,16 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     COL_HDR = [
         "DIA", "SEMANA", "DATA",
         "INÍCIO", "INTERVALO", "VOLTA", "TÉRMINO",
-        "HORAS", "50 %", "100 %", "OBSERVAÇÃO"
+        "HORAS", "50 %", "100 %", "OBSERVAÇÕES"
     ]
 
     total_worked = timedelta(0)
     total_50     = timedelta(0)
     total_100    = timedelta(0)
+    
+    val_tot_50   = 0.0
+    val_tot_100  = 0.0
+    
     destaque_idx = []
     data_rows    = []
 
@@ -158,8 +162,28 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
         data_rows.append(r)
 
         total_worked += row.get("duracao_td", timedelta(0))
-        total_50     += _to_td(row.get("50%", "00:00"))
-        total_100    += _to_td(row.get("100%", "00:00"))
+        t50 = _to_td(row.get("50%", "00:00"))
+        t100 = _to_td(row.get("100%", "00:00"))
+        
+        total_50     += t50
+        total_100    += t100
+        
+        # Financial logic per row (Fallback to user's valor_base if snapshot is 0)
+        try:
+            row_vbase = float(row.get("valor_base_snapshot", 0.0))
+        except:
+            row_vbase = 0.0
+            
+        if row_vbase <= 0.0:
+            row_vbase = valor_base
+            
+        row_vhora = row_vbase / 200.0
+        
+        if t50.total_seconds() > 0:
+            val_tot_50 += (t50.total_seconds() / 3600.0) * row_vhora * 1.5
+            
+        if t100.total_seconds() > 0:
+            val_tot_100 += (t100.total_seconds() / 3600.0) * row_vhora * 2.0
 
     footer = [
         "", "", "", "", "", "", "TOTAL:",
@@ -225,19 +249,13 @@ def gerar_pdf(dados_consolidados, colaborador: str, mes: str,
     # ── Seção Financeira (Valores a Receber) ──────────────────────────────────
     elems.append(Spacer(1, 0.5*cm))
     
-    # Cálculos Oficiais (Divisor 200)
-    v_hora = valor_base / 200.0
-    h50  = total_50.total_seconds() / 3600.0
-    h100 = total_100.total_seconds() / 3600.0
-    
-    val_50  = h50 * v_hora * 1.5
-    val_100 = h100 * v_hora * 2.0
-    val_tot = val_50 + val_100
+    # Cálculos dinâmicos já realizados linha a linha no loop superior
+    val_tot = val_tot_50 + val_tot_100
     
     def f_real(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     fin_data = [
-        [f"Total Extra 50%: {f_real(val_50)}               Total Extra 100%: {f_real(val_100)}"],
+        [f"Total Extra 50%: {f_real(val_tot_50)}               Total Extra 100%: {f_real(val_tot_100)}"],
         [Paragraph(f"<b>Total Geral a Receber: {f_real(val_tot)}</b>", styles["Normal"])]
     ]
     fin_table = Table(fin_data, colWidths=[26.1*cm])
