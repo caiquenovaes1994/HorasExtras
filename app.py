@@ -4,6 +4,7 @@ from datetime    import datetime, timedelta
 import os
 import extra_streamlit_components as stx
 import time
+import re
 
 import database
 import utils
@@ -21,14 +22,8 @@ def _init_db_once():
 
 _init_db_once()
 
-# Inicializa o CookieManager do extra-streamlit-components
+# Inicializa o CookieManager
 cookie_manager = stx.CookieManager(key="cookie_manager_primary")
-
-if "cookies_hydrated" not in st.session_state:
-    st.session_state["cookies_hydrated"] = True
-    with st.spinner("Restaurando sessão segura..."):
-        time.sleep(0.1) # Breve pausa para não dar erro visual
-    st.stop()
 
 st.markdown("""
 <style>
@@ -102,14 +97,15 @@ _DEFAULTS: dict = {
     "reg_termino":        "",
     "reg_obs":            "",
     "reg_reset":          False,
+    "logout_lock":        False,
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
-# Lógica do Auto-Login por Cookies
+# Lógica do Auto-Login por Cookies (Ignora se o usuário acabou de clicar em Sair)
 auth_token = cookie_manager.get(cookie="auth_token")
-if not st.session_state.logged_in and auth_token:
+if not st.session_state.logged_in and auth_token and not st.session_state.get("logout_lock"):
     username = database.decrypt_str(auth_token)
     if username:
         user_data = database.get_user_by_username(username)
@@ -119,14 +115,13 @@ if not st.session_state.logged_in and auth_token:
             st.rerun()
 
 # Valida integridade da sessão (protege contra versões antigas no cache)
-if st.session_state.logged_in and (
+if st.session_state.get("logged_in") and (
     not isinstance(st.session_state.user, dict)
     or "nome" not in st.session_state.user
 ):
     st.session_state.logged_in = False
     st.session_state.user      = None
     cookie_manager.delete("auth_token")
-    time.sleep(0.5) # Atraso obrigatório para garantir gravação no iframe antes do rerun
     st.rerun()
 
 
@@ -146,12 +141,13 @@ if not st.session_state.logged_in:
                 if u:
                     st.session_state.logged_in = True
                     st.session_state.user      = u
+                    st.session_state.logout_lock = False
                     
                     # Salva cookie gerando um token seguro válido por 24 horas
                     token = database.encrypt_str(u["username"])
                     expires = datetime.now() + timedelta(hours=24)
                     cookie_manager.set("auth_token", token, expires_at=expires, path="/")
-                    time.sleep(0.5) # Atraso obrigatório para o stx despachar a operação pro browser
+                    time.sleep(0.5) 
                     st.rerun()
                 else:
                     st.error("Usuário ou senha inválidos.")
@@ -227,12 +223,12 @@ def _dlg_novo_usuario():
         pw    = st.text_input("Senha inicial", type="password")
         nome  = st.text_input("Nome Completo")
         vbase = st.number_input("Salário Mensal (R$)", min_value=0.0, step=0.1, format="%.2f")
-        adm   = st.checkbox("Administrador")
+        perf = st.selectbox("Perfil", options=["USER", "ADMIN", "GESTOR"])
         ok    = st.form_submit_button("CRIAR", use_container_width=True)
     if ok:
         if not uname.strip() or not pw or not nome.strip():
             st.warning("Preencha todos os campos.")
-        elif database.create_user(uname.strip(), pw, nome.strip(), adm, vbase):
+        elif database.create_user(uname.strip(), pw, nome.strip(), perf, vbase):
             st.success("Usuário criado!")
             st.session_state.dlg_user_novo = False
             st.rerun()
@@ -247,14 +243,20 @@ def _dlg_editar_usuario():
         new_uname = st.text_input("Usuário",        value=d["user"])
         new_nome  = st.text_input("Nome Completo",  value=d["nome"])
         new_vbase = st.number_input("Salário Mensal (R$)", value=float(d["valor_base"]), min_value=0.0, step=0.1, format="%.2f")
-        new_adm   = st.checkbox("Administrador",    value=bool(d["admin"]))
+        
+        perfil_opts = ["USER", "ADMIN", "GESTOR"]
+        current_perf = d.get("perfil", "USER")
+        try: p_idx = perfil_opts.index(current_perf)
+        except: p_idx = 0
+        new_perf  = st.selectbox("Perfil", options=perfil_opts, index=p_idx)
+        
         new_pw    = st.text_input("Nova Senha (em branco = manter)", type="password")
         c1, c2    = st.columns(2)
         salvar    = c1.form_submit_button("SALVAR",   use_container_width=True)
         cancelar  = c2.form_submit_button("CANCELAR", use_container_width=True)
     if salvar:
         if database.update_user(d["uid"], new_uname.strip(), new_nome.strip(),
-                                new_adm, new_vbase, new_pw or None):
+                                new_perf, new_vbase, new_pw or None):
             st.success("Atualizado!")
             st.session_state.dlg_user_editar = None
             st.rerun()
@@ -405,24 +407,24 @@ def _dlg_confirmar_delecao():
         st.rerun()
 
 
-# Disparar modais conforme session_state
+# ── DISPARO DE MODAIS (Apenas um por execução) ────────────────────────────────
 if st.session_state.dlg_hotel_novo:
     _dlg_novo_hotel()
-if st.session_state.dlg_hotel_editar is not None:
+elif st.session_state.dlg_hotel_editar is not None:
     _dlg_editar_hotel()
-if st.session_state.dlg_user_novo:
+elif st.session_state.dlg_user_novo:
     _dlg_novo_usuario()
-if st.session_state.dlg_user_editar is not None:
+elif st.session_state.dlg_user_editar is not None:
     _dlg_editar_usuario()
-if st.session_state.dlg_perfil_editar:
+elif st.session_state.dlg_perfil_editar:
     _dlg_editar_perfil()
-if st.session_state.dlg_reg_editar is not None:
+elif st.session_state.dlg_reg_editar is not None:
     _dlg_editar_registro()
-if st.session_state.dlg_reg_deletar is not None:
+elif st.session_state.dlg_reg_deletar is not None:
     _dlg_confirmar_delecao()
-if st.session_state.dlg_reg_ver is not None:
+elif st.session_state.dlg_reg_ver is not None:
     _dlg_visualizar_registro()
-if st.session_state.dlg_bulk_delete:
+elif st.session_state.dlg_bulk_delete:
     _dlg_bulk_delete()
 
 
@@ -439,13 +441,40 @@ with st.sidebar:
 
     if st.button("Sair", use_container_width=True):
         cookie_manager.delete("auth_token")
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        time.sleep(0.5) # Atraso obrigatório para garantir exclusão no iframe antes do rerun
+        st.session_state.logged_in = False
+        st.session_state.user      = None
+        st.session_state.logout_lock = True # Trava o auto-login até a próxima ação manual
         st.rerun()
 
     st.markdown("---")
     st.markdown("### 📅 Relatório PDF")
+
+    u_perfil = u.get("perfil", "USER")
+    is_gestor = u_perfil == "GESTOR"
+    is_admin  = u_perfil == "ADMIN"
+
+    # Seleção de usuário para o PDF (Gestor/Admin podem escolher 'TODOS' ou um específico)
+    target_user_name = u["nome"]
+    target_username  = u["username"]
+    target_vbase     = u.get("valor_base", 0.0)
+    
+    selected_target = "MEU RELATÓRIO"
+    if is_gestor or is_admin:
+        all_users = database.get_all_users()
+        u_opts = ["TODOS"] + [f"{usr[2]} ({usr[1]})" for usr in all_users]
+        selected_target = st.selectbox("Colaborador", u_opts)
+        
+        if selected_target != "TODOS":
+            # Extrair username entre parênteses
+            m = re.search(r"\((.*)\)", selected_target)
+            if m:
+                target_username = m.group(1)
+                # Buscar nome e valor_base desse usuário
+                for usr in all_users:
+                    if usr[1] == target_username:
+                        target_user_name = usr[2]
+                        target_vbase = usr[5]
+                        break
 
     MESES = ["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO",
              "JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"]
@@ -454,23 +483,56 @@ with st.sidebar:
 
     if st.button("🚀 GERAR PDF", use_container_width=True):
         try:
-            rows  = database.get_all_chamados()
-            df    = pd.DataFrame(
-                rows,
-                columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot"]
-            )
-            df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
-            path  = f"folha_horas_{m_sel}_{a_sel}.pdf"
-            report_generator.gerar_pdf(df_ag, u["nome"], m_sel, str(a_sel), u.get("valor_base", 0.0), path)
-            with open(path, "rb") as fh:
-                st.session_state["pdf_bytes"] = fh.read()
-            st.session_state["pdf_nome"] = path
-            
-            # DELEÇÃO IMEDIATA: Remove o arquivo físico após carregar os bytes para a memória da sessão
-            if os.path.exists(path):
-                os.remove(path)
+            if selected_target == "TODOS":
+                # Lógica de PDF Consolidado
+                rows_all = database.get_all_chamados()
+                # Filtrar apenas o período desejado globalmente
+                df_all = pd.DataFrame(rows_all, columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot", "username"])
                 
-            st.success("✅ PDF gerado e pronto para download!")
+                # Para o PDF consolidado, precisamos agrupar por usuário
+                # Mas o utils.agrupar_por_data já faz o merge com datas do mês.
+                # Teremos que adaptar o report_generator ou chamar múltiplas vezes?
+                # O usuário pediu: "Cada plantonista deve começar em uma nova página"
+                
+                # Lista de tuplas (df_agrupado, nome_completo, valor_base)
+                consolidados = []
+                all_users_list = database.get_all_users()
+                
+                # Filtrar quem teve horas
+                usernames_com_horas = df_all['username'].unique()
+                
+                for usr_tuple in all_users_list:
+                    uname_ = usr_tuple[1]
+                    if uname_ in usernames_com_horas:
+                        df_u = df_all[df_all['username'] == uname_]
+                        df_ag = utils.agrupar_por_data(df_u, m_sel, a_sel)
+                        # Só adiciona se houver alguma hora trabalhada no período
+                        if not df_ag[df_ag['horas_trabalhadas'] != ""].empty:
+                            consolidados.append((df_ag, usr_tuple[2], usr_tuple[5]))
+
+                if not consolidados:
+                    st.warning("Nenhum registro encontrado para o período.")
+                else:
+                    path = f"relatorio_consolidado_{m_sel}_{a_sel}.pdf"
+                    report_generator.gerar_pdf_massa(consolidados, m_sel, str(a_sel), path)
+                    with open(path, "rb") as fh:
+                        st.session_state["pdf_bytes"] = fh.read()
+                    st.session_state["pdf_nome"] = path
+                    if os.path.exists(path): os.remove(path)
+                    st.success("✅ PDF Consolidado gerado!")
+            else:
+                # PDF Individual
+                rows = database.get_all_chamados(target_username)
+                df = pd.DataFrame(rows, columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot", "username"])
+                df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
+                path = f"folha_horas_{target_user_name.replace(' ', '_')}_{m_sel}_{a_sel}.pdf"
+                report_generator.gerar_pdf(df_ag, target_user_name, m_sel, str(a_sel), target_vbase, path)
+                with open(path, "rb") as fh:
+                    st.session_state["pdf_bytes"] = fh.read()
+                st.session_state["pdf_nome"] = path
+                if os.path.exists(path): os.remove(path)
+                st.success(f"✅ PDF de {target_user_name} gerado!")
+                
         except Exception as ex:
             import traceback
             st.error(f"Erro ao gerar PDF:\n{ex}")
@@ -496,70 +558,107 @@ st.markdown('<h1 class="page-title">CONTROLE DE HORAS EXTRAS</h1>', unsafe_allow
 h_rows = database.get_hoteis()
 h_opts = [f"{r} - {n}" for r, n in h_rows]
 
-TABS_LIST = ["📝 Novo Registro", "📋 Histórico", "🏨 Hotéis", "⚙️ Usuários"]
-if st.session_state.user.get("admin"):
+u_perfil = st.session_state.user.get("perfil", "USER")
+is_admin = u_perfil == "ADMIN"
+is_gestor = u_perfil == "GESTOR"
+
+TABS_LIST = []
+if not is_gestor:
+    TABS_LIST.append("📝 Novo Registro")
+
+TABS_LIST.append("📋 Histórico")
+TABS_LIST.append("🏨 Hotéis")
+TABS_LIST.append("⚙️ Usuários")
+
+if is_admin:
     TABS_LIST.append("🔔 Aprovações")
 
-TABS = st.tabs(TABS_LIST)
+tabs = st.tabs(TABS_LIST)
+tab_map = dict(zip(TABS_LIST, tabs))
+
+TAB_REG = tab_map.get("📝 Novo Registro")
+TAB_HIST = tab_map.get("📋 Histórico")
+TAB_HOTEL = tab_map.get("🏨 Hotéis")
+TAB_USER = tab_map.get("⚙️ Usuários")
+TAB_APROV = tab_map.get("🔔 Aprovações")
 
 
 # ── ABA 0 – Novo Registro ─────────────────────────────────────────────────────
-with TABS[0]:
-    # Lógica de Reset Seguro (Evita erro de 'instantiated widget')
-    if st.session_state.get("reg_reset"):
-        st.session_state.reg_data    = datetime.now()
-        st.session_state.reg_caso    = ""
-        st.session_state.reg_hotel   = None
-        st.session_state.reg_motivo  = ""
-        st.session_state.reg_inicio  = ""
-        st.session_state.reg_termino = ""
-        st.session_state.reg_obs     = ""
-        st.session_state.reg_reset   = False
+if TAB_REG:
+    with TAB_REG:
+        # Lógica de Reset Seguro (Evita erro de 'instantiated widget')
+        if st.session_state.get("reg_reset"):
+            st.session_state.reg_data    = datetime.now()
+            st.session_state.reg_caso    = ""
+            st.session_state.reg_hotel   = None
+            st.session_state.reg_motivo  = ""
+            st.session_state.reg_inicio  = ""
+            st.session_state.reg_termino = ""
+            st.session_state.reg_obs     = ""
+            st.session_state.reg_reset   = False
 
-    st.subheader("Inserir Novo Chamado")
-    with st.form("frm_novo_reg", clear_on_submit=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
-            f_caso   = st.text_input("Caso / INC", key="reg_caso")
-            f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel...", key="reg_hotel")
-            f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
-        with c2:
-            f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
-            f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
-            f_obs     = st.text_area("Observações", height=138, key="reg_obs")
+        st.subheader("Inserir Novo Chamado")
+        with st.form("frm_novo_reg", clear_on_submit=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
+                f_caso   = st.text_input("Caso / INC", key="reg_caso")
+                f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel...", key="reg_hotel")
+                f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
+            with c2:
+                f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
+                f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
+                f_obs     = st.text_area("Observações", height=138, key="reg_obs")
 
-        if st.form_submit_button("💾 SALVAR", use_container_width=True):
-            if not f_inicio or not f_fim or not f_motivo.strip():
-                st.error("Campos obrigatórios: Início, Término e Motivo.")
-            else:
-                try:
-                    rid_, hnome_ = ("", "")
-                    if f_hsel:
-                        rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
-                    
-                    ti = utils.processar_input_horario(f_inicio)
-                    tf = utils.processar_input_horario(f_fim)
-                    vbase_atual = float(st.session_state.user.get("valor_base", 0.0))
-                    database.save_chamado(
-                        f_data.strftime("%Y-%m-%d"),
-                        f_caso.strip() or None,
-                        rid_, hnome_, ti, tf,
-                        f_obs.strip() or None,
-                        f_motivo.strip(),
-                        vbase_atual
-                    )
-                    st.success(f"✅ Registrado!")
-                    # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
-                    st.session_state.reg_reset = True
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao salvar: {e}")
+            if st.form_submit_button("💾 SALVAR", use_container_width=True):
+                if not f_inicio or not f_fim or not f_motivo.strip():
+                    st.error("Campos obrigatórios: Início, Término e Motivo.")
+                else:
+                    try:
+                        rid_, hnome_ = ("", "")
+                        if f_hsel:
+                            rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
+                        
+                        ti = utils.processar_input_horario(f_inicio)
+                        tf = utils.processar_input_horario(f_fim)
+                        vbase_atual = float(st.session_state.user.get("valor_base", 0.0))
+                        database.save_chamado(
+                            f_data.strftime("%Y-%m-%d"),
+                            f_caso.strip() or None,
+                            rid_, hnome_, ti, tf,
+                            f_obs.strip() or None,
+                            f_motivo.strip(),
+                            st.session_state.user["username"],
+                            vbase_atual
+                        )
+                        st.success(f"✅ Registrado!")
+                        # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
+                        st.session_state.reg_reset = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
 
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────
-with TABS[1]:
-    rows_all = database.get_all_chamados()
+with TAB_HIST:
+    # Lógica de filtragem inicial: Se for USER, ele só vê o dele.
+    # Se for ADMIN ou GESTOR, pode ver tudo.
+    username_filter = None
+    if u_perfil == "USER":
+        username_filter = st.session_state.user["username"]
+    
+    # Se for Admin ou Gestor, exibe o seletor de plantonista
+    selected_usr_hist = "TODOS"
+    if is_admin or is_gestor:
+        all_usrs = database.get_all_users()
+        u_opts_hist = ["TODOS"] + [f"{usr[2]} ({usr[1]})" for usr in all_usrs]
+        selected_usr_hist = st.selectbox("Filtrar por Plantonista", u_opts_hist, key="hist_user_filter")
+        
+        if selected_usr_hist != "TODOS":
+            m = re.search(r"\((.*)\)", selected_usr_hist)
+            if m: username_filter = m.group(1)
+
+    rows_all = database.get_all_chamados(username_filter)
     if rows_all:
         # Filtros de Histórico
         c_h1, c_h2 = st.columns(2)
@@ -567,7 +666,7 @@ with TABS[1]:
         with c_h1:
             m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual_idx)
         with c_h2:
-            a_hist = st.number_input("Ano", min_value=2024, max_value=2050, value=datetime.now().year, step=1)
+            a_hist = st.number_input("Ano ", min_value=2024, max_value=2050, value=datetime.now().year, step=1)
         
         # Lógica de Filtragem no Histórico (Ciclo de Competência)
         if m_hist != "TODOS":
@@ -576,46 +675,41 @@ with TABS[1]:
 
         rows = []
         for r in rows_all:
-            # r: id, data, caso, rid, hotel, inicio, termino, obs, motivo, ...
             dt_obj = datetime.strptime(r[1], "%Y-%m-%d")
-            
             if m_hist != "TODOS":
-                # Filtra estritamente dentro da faixa de competência
-                if not (inicio_comp <= dt_obj <= fim_comp):
-                    continue
+                if not (inicio_comp <= dt_obj <= fim_comp): continue
             else:
-                # Se for TODOS, filtra apenas pelo Ano
-                if a_hist and dt_obj.year != a_hist:
-                    continue
-            
+                if a_hist and dt_obj.year != a_hist: continue
             rows.append(r)
             
         if rows:
             sel_count = len(st.session_state.selected_records)
-            if st.button(f"🗑️ Deletar {sel_count} selecionado(s)" if sel_count > 0 else "🗑️ Deletar Selecionados", disabled=(sel_count == 0)):
-                st.session_state.dlg_bulk_delete = True
-                st.rerun()
+            cols_bulk = st.columns([2, 6])
+            with cols_bulk[0]:
+                if not is_gestor:
+                    if st.button(f"🗑️ Deletar {sel_count} selecionado(s)" if sel_count > 0 else "Deletar Selecionados", disabled=(sel_count == 0), use_container_width=True):
+                        st.session_state.dlg_bulk_delete = True
+                        st.rerun()
                 
-            cols = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
+            cols_h = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
             headers = ["", "Data", "Caso", "Hotel", "Início", "Término", "Observações", "Ações"]
-            for col, h in zip(cols, headers):
+            for col, h in zip(cols_h, headers):
                 col.markdown(f"**{h}**")
             st.divider()
             
             def bind_checkbox(r_id):
                 key = f"chk_{r_id}"
-                if st.session_state[key]:
-                    st.session_state.selected_records.add(r_id)
-                else:
-                    st.session_state.selected_records.discard(r_id)
+                if st.session_state[key]: st.session_state.selected_records.add(r_id)
+                else: st.session_state.selected_records.discard(r_id)
             
             for r in rows:
                 c0, c1, c2, c4, c5, c6, c7, c8 = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
                 rid = r[0]
                 
-                # Checkbox sync
+                # Checkbox sync (Gestor não seleciona pois não deleta em massa)
                 chk_key = f"chk_{rid}"
-                c0.checkbox(" ", key=chk_key, value=(rid in st.session_state.selected_records), on_change=bind_checkbox, args=(rid,), label_visibility="collapsed")
+                if not is_gestor:
+                    c0.checkbox(" ", key=chk_key, value=(rid in st.session_state.selected_records), on_change=bind_checkbox, args=(rid,), label_visibility="collapsed")
                 
                 dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
                 c1.write(dt_fmt)
@@ -625,75 +719,99 @@ with TABS[1]:
                 c6.write(r[6])
                 c7.write(r[7] or "—")
                 
-                bt_ver, bt_ed = c8.columns(2)
-                if bt_ver.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar registro"):
-                    st.session_state.dlg_reg_ver = r[0]
-                    st.rerun()
-                if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
-                    st.session_state.dlg_reg_editar = r[0]
-                    st.rerun()
+                if is_gestor:
+                    # Gestor: Apenas ícone de Olho
+                    if c8.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar", use_container_width=True):
+                        st.session_state.dlg_reg_ver = r[0]
+                        st.rerun()
+                else:
+                    bt_ver, bt_ed = c8.columns(2)
+                    if bt_ver.button("👁️", key=f"ver_reg_{r[0]}"):
+                        st.session_state.dlg_reg_ver = r[0]
+                        st.rerun()
+                    if bt_ed.button("✏️", key=f"ed_reg_{r[0]}"):
+                        st.session_state.dlg_reg_editar = r[0]
+                        st.rerun()
     else:
         st.info("Nenhum registro encontrado.")
 
 
 # ── ABA 2 – Hotéis ───────────────────────────────────────────────────────────
-with TABS[2]:
+with TAB_HOTEL:
     st.subheader("Gestão de Hotéis")
-    if st.button("➕ Sugerir Novo Hotel", type="primary"):
-        st.session_state.dlg_hotel_novo = True
-        st.rerun()
+    if not is_gestor:
+        if st.button("➕ Sugerir Novo Hotel", type="primary"):
+            st.session_state.dlg_hotel_novo = True
+            st.rerun()
 
     if h_rows:
-        c_cod, c_nom, c_ed, c_del = st.columns([1.2, 5, 0.6, 0.6])
-        c_cod.markdown("**RID**"); c_nom.markdown("**Nome**")
+        if is_gestor:
+            c_cod, c_nom = st.columns([1.5, 6])
+            c_cod.markdown("**RID**"); c_nom.markdown("**Nome**")
+        else:
+            c_cod, c_nom, c_ed, c_del = st.columns([1.2, 5, 0.6, 0.6])
+            c_cod.markdown("**RID**"); c_nom.markdown("**Nome**")
+            
         st.divider()
         for i, (r, n) in enumerate(h_rows):
-            ca, cb, cc, cd = st.columns([1.2, 5, 0.6, 0.6])
-            ca.write(r); cb.write(n)
-            if cc.button("✏️", key=f"edh_{i}", help="Sugerir alteração"):
-                st.session_state.dlg_hotel_editar = {"rid": r, "nome": n}
-                st.rerun()
-            if cd.button("🗑️", key=f"dlh_{i}", help="Solicitar exclusão"):
-                database.criar_solicitacao_hotel(r, n, 'DELETE', st.session_state.user["id"])
-                st.info("Solicitação de exclusão enviada.")
-                st.rerun()
+            if is_gestor:
+                ca, cb = st.columns([1.5, 6])
+                ca.write(r); cb.write(n)
+            else:
+                ca, cb, cc, cd = st.columns([1.2, 5, 0.6, 0.6])
+                ca.write(r); cb.write(n)
+                if cc.button("✏️", key=f"edh_{i}", help="Sugerir alteração"):
+                    st.session_state.dlg_hotel_editar = {"rid": r, "nome": n}
+                    st.rerun()
+                if cd.button("🗑️", key=f"dlh_{i}", help="Solicitar exclusão"):
+                    database.criar_solicitacao_hotel(r, n, 'DELETE', st.session_state.user["id"])
+                    st.info("Solicitação de exclusão enviada.")
+                    st.rerun()
     else:
         st.info("Nenhum hotel cadastrado ou aprovado.")
 
 
 # ── ABA 3 – Usuários ─────────────────────────────────────────────────────────
-with TABS[3]:
-    if st.session_state.user.get("admin"):
+with TAB_USER:
+    if is_admin or is_gestor:
         st.subheader("Gestão de Usuários")
-        if st.button("➕ Novo Usuário", type="primary"):
-            st.session_state.dlg_user_novo = True
-            st.rerun()
+        if is_admin:
+            if st.button("➕ Novo Usuário", type="primary"):
+                st.session_state.dlg_user_novo = True
+                st.rerun()
 
         u_list = database.get_all_users()
         if u_list:
             st.divider()
-            for uid, uname, unom, uadm, umust, uvb in u_list:
-                cu, cn, cp, ce, cr, cx = st.columns([1.5, 2.5, 1, 0.6, 0.6, 0.6])
-                cu.write(f"**{uname}**")
-                cn.write(unom or "—")
-                # Exibe perfil na lista
-                cp.write("🔴 Admin" if uadm else "🟢 User")
-                if ce.button("✏️", key=f"edu_{uid}", help="Editar"):
-                    st.session_state.dlg_user_editar = {
-                        "uid": uid, "user": uname, "nome": unom, "admin": uadm, "valor_base": uvb
-                    }
-                    st.rerun()
-                if cr.button("🔑", key=f"resetu_{uid}", help="Resetar Senha para 'mudar123'"):
-                    database.reset_password_admin(uid)
-                    st.success(f"Senha de {uname} resetada para 'mudar123'!")
-                if cx.button("🗑️", key=f"dlu_{uid}", help="Excluir"):
-                    database.delete_user(uid)
-                    st.rerun()
+            for usr in u_list:
+                # usr: id, username, nome_completo, is_admin, must_change_password, valor_base, perfil
+                uid, uname, unom, uadm, umust, uvb, uperfil_ = usr
+                if is_gestor:
+                    cu, cn, cp = st.columns([2, 4, 1.5])
+                    cu.write(f"**{uname}**")
+                    cn.write(unom or "—")
+                    cp.write(f"🏷️ {uperfil_}")
+                else:
+                    cu, cn, cp, ce, cr, cx = st.columns([1.5, 2.5, 1, 0.6, 0.6, 0.6])
+                    cu.write(f"**{uname}**")
+                    cn.write(unom or "—")
+                    cp.write("🔴 Admin" if uperfil_ == "ADMIN" else ("🟡 Gestor" if uperfil_ == "GESTOR" else "🟢 User"))
+                    if ce.button("✏️", key=f"edu_{uid}", help="Editar"):
+                        st.session_state.dlg_user_editar = {
+                            "uid": uid, "user": uname, "nome": unom, "admin": uadm, "valor_base": uvb, "perfil": uperfil_
+                        }
+                        st.rerun()
+                    if cr.button("🔑", key=f"resetu_{uid}", help="Resetar Senha"):
+                        database.reset_password_admin(uid)
+                        st.success(f"Senha de {uname} resetada!")
+                    if cx.button("🗑️", key=f"dlu_{uid}", help="Excluir"):
+                        database.delete_user(uid)
+                        st.rerun()
     else:
-        st.info("Acesso restrito a administradores.")
+        st.info("Acesso restrito.")
 
-if st.session_state.user.get("admin"):
-    with TABS[4]:
+if is_admin and TAB_APROV:
+    with TAB_APROV:
         st.subheader("🔔 Aprovações Pendentes (Hotéis)")
         sols = database.get_solicitacoes_pendentes()
         if sols:

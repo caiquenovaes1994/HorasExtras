@@ -79,20 +79,16 @@ def _to_td(s: str) -> timedelta:
 # ─────────────────────────────────────────────────────────────────────────────
 # GERADOR PRINCIPAL
 # ─────────────────────────────────────────────────────────────────────────────
-def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
-              ano: str, valor_base: float, output_path: str = "folha_horas.pdf") -> str:
+from reportlab.platypus import PageBreak
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GERADOR PRINCIPAL
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _criar_elementos_usuario(styles, dados_consolidados, plantonista, mes, ano, valor_base):
+    """Gera a lista de elementos Platypus para um único colaborador."""
+    elems = []
     
-    pts_cm = 28.35
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=landscape(A4), 
-        rightMargin=1.8*pts_cm, leftMargin=1.8*pts_cm,
-        topMargin=1.0*pts_cm,   bottomMargin=1.0*pts_cm,
-    )
-
-    styles = getSampleStyleSheet()
-    elems  = []
-
     # ── Título (Inter 9 Bold) ─────────────────────────────────────────────
     title_style = ParagraphStyle(
         "TitleMain",
@@ -109,7 +105,6 @@ def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
     hdr_data = [
         ["PLANTONISTA:", plantonista.upper(), "MÊS:", mes.upper(), "ANO:", ano]
     ]
-    # Útil A4L: 29.7 - 1.8*2 = 26.1 cm (Mantido a proporção e width para a página renderizar cheia sem desalinhar a main grid)
     hdr_widths = [2.5*cm, 10.0*cm, 1.2*cm, 4.0*cm, 1.2*cm, 7.2*cm]
     hdr_table  = Table(hdr_data, colWidths=hdr_widths)
     hdr_table.setStyle(TableStyle([
@@ -200,27 +195,12 @@ def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
 
     full_data = [COL_HDR] + data_rows + [footer]
 
-    # Alturas otimizadas: máximo 0.45cm para não esticar demais, mas encolhe para caber em uma página
     n_lines = len(full_data)
-    # Útil A4L: 21.0 - 1.0*2 (margens) - ~1.7 (title) - ~1.0 (header) - ~1.5 (financial) = ~15.5cm
     max_total_h  = 15.5 * cm
     target_row_h = 0.45 * cm
     row_h        = min(target_row_h, max_total_h / n_lines)
     
-    # Larguras colunas (Soma = 26.1cm)
-    col_w = [
-        1.2*cm, # Dia
-        3.4*cm, # Semana
-        2.6*cm, # Data
-        2.2*cm, # P1
-        2.2*cm, # P2
-        2.2*cm, # P3
-        2.0*cm, # Horas
-        1.5*cm, # 50
-        1.5*cm, # 100
-        7.3*cm  # Obs
-    ]
-
+    col_w = [1.2*cm, 3.4*cm, 2.6*cm, 2.2*cm, 2.2*cm, 2.2*cm, 2.0*cm, 1.5*cm, 1.5*cm, 7.3*cm]
     main_table = Table(full_data, colWidths=col_w, rowHeights=[row_h]*n_lines)
 
     ts = [
@@ -229,48 +209,89 @@ def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
         ("FONTSIZE",   (0, 0), (-1, -1), 7),
         ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
-        # Cabeçalho Vinho com Texto Branco
         ("BACKGROUND", (0, 0), (-1, 0),  WINE),
         ("TEXTCOLOR",  (0, 0), (-1, 0),  WHITE),
         ("FONTNAME",   (0, 0), (-1, 0),  DEFAULT_FONT_BOLD),
     ]
 
-    # Aplicar Gray Row para fins de semana/feriado
     for idx in destaque_idx:
         ts.append(("BACKGROUND", (0, idx), (-1, idx), GRAY_ROW))
 
-    # Estilo Rodapé Total
     ts.append(("FONTNAME", (5, -1), (8, -1), DEFAULT_FONT_BOLD))
     ts.append(("BACKGROUND", (5, -1), (8, -1), WINE))
     ts.append(("TEXTCOLOR",  (5, -1), (8, -1), WHITE))
-
-    # Forçar centro total para dados (incluindo Observação a pedido do usuário)
     ts.append(("ALIGN", (0, 1), (-1, -1), "CENTER"))
 
     main_table.setStyle(TableStyle(ts))
     elems.append(main_table)
 
-    # ── Seção Financeira (Valores a Receber) ──────────────────────────────────
+    # ── Seção Financeira ──────────────────────────────────
     elems.append(Spacer(1, 0.5*cm))
-    
-    # Cálculos dinâmicos já realizados linha a linha no loop superior
     val_tot = val_tot_50 + val_tot_100
     
     def f_real(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     fin_data = [
-        [f"Total Extra 50%: {f_real(val_tot_50)}               Total Extra 100%: {f_real(val_tot_100)}"],
-        [Paragraph(f"<b>Total Geral a Receber: {f_real(val_tot)}</b>", styles["Normal"])]
+        [f"Total Extra 50%: {f_real(val_tot_50)}", f"Total Extra 100%: {f_real(val_tot_100)}"],
+        [f"Total Geral a Receber: {f_real(val_tot)}", ""]
     ]
-    fin_table = Table(fin_data, colWidths=[26.1*cm])
+    
+    # Largura total de 13.8 cm para alinhar até a coluna PLANTÃO 3
+    fin_table = Table(fin_data, colWidths=[6.9*cm, 6.9*cm])
     fin_table.setStyle(TableStyle([
+        # Bordas e Alinhamento
+        ("GRID",       (0, 0), (-1, -1), 0.5, BLACK),
         ("ALIGN",      (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        
+        # Fontes e Cores
         ("FONTNAME",   (0, 0), (-1, -1), DEFAULT_FONT),
         ("FONTSIZE",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("TEXTCOLOR",  (0, 0), (-1, -1), BLACK),
+        
+        # Linha 2: Total Geral (Mesclada e Negrito)
+        ("SPAN",       (0, 1), (1, 1)),
+        ("FONTNAME",   (0, 1), (1, 1), DEFAULT_FONT_BOLD),
+        
+        # Ajustes Internos
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
     ]))
     elems.append(fin_table)
+    return elems
 
+def gerar_pdf(dados_consolidados, plantonista: str, mes: str,
+              ano: str, valor_base: float, output_path: str = "folha_horas.pdf") -> str:
+    
+    pts_cm = 28.35
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=landscape(A4), 
+        rightMargin=1.8*pts_cm, leftMargin=1.8*pts_cm,
+        topMargin=1.0*pts_cm,   bottomMargin=1.0*pts_cm,
+    )
+    styles = getSampleStyleSheet()
+    elems = _criar_elementos_usuario(styles, dados_consolidados, plantonista, mes, ano, valor_base)
     doc.build(elems)
+    return output_path
+
+def gerar_pdf_massa(lista_consolidados, mes: str, ano: str, output_path: str) -> str:
+    """
+    lista_consolidados: List[Tuple(df_agrupado, nome_completo, valor_base)]
+    """
+    pts_cm = 28.35
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=landscape(A4), 
+        rightMargin=1.8*pts_cm, leftMargin=1.8*pts_cm,
+        topMargin=1.0*pts_cm,   bottomMargin=1.0*pts_cm,
+    )
+    styles = getSampleStyleSheet()
+    all_elems = []
+    
+    for i, (df_ag, nome, vbase) in enumerate(lista_consolidados):
+        if i > 0:
+            all_elems.append(PageBreak())
+        all_elems.extend(_criar_elementos_usuario(styles, df_ag, nome, mes, ano, vbase))
+        
+    doc.build(all_elems)
     return output_path

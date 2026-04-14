@@ -111,7 +111,8 @@ def init_db():
             inicio      TIME    NOT NULL,
             termino     TIME    NOT NULL,
             observacoes TEXT,
-            motivo      TEXT
+            motivo      TEXT,
+            username    TEXT
         );
         
         CREATE TABLE IF NOT EXISTS solicitacoes_hoteis (
@@ -129,6 +130,7 @@ def init_db():
             password             TEXT NOT NULL,
             nome_completo        TEXT,
             is_admin             BOOLEAN DEFAULT 0,
+            perfil               TEXT DEFAULT 'USER',
             must_change_password BOOLEAN DEFAULT 1,
             valor_base           TEXT DEFAULT '0.0'
         );
@@ -140,9 +142,26 @@ def init_db():
         );
     """)
 
+    # Migrações
+    try:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN perfil TEXT DEFAULT 'USER'")
+    except: pass
+
+    try:
+        cursor.execute("ALTER TABLE chamados ADD COLUMN username TEXT")
+    except: pass
+
+    # Sincroniza perfis antigos baseados em is_admin
+    cursor.execute("UPDATE usuarios SET perfil = 'ADMIN' WHERE is_admin = 1 AND (perfil IS NULL OR perfil = 'USER')")
+    
+    # Atribui registros órfãos ao primeiro admin encontrado para não perder dados na migração
+    cursor.execute("SELECT username FROM usuarios WHERE perfil = 'ADMIN' LIMIT 1")
+    admin_row = cursor.fetchone()
+    if admin_row:
+        cursor.execute("UPDATE chamados SET username = ? WHERE username IS NULL", (admin_row[0],))
+
     # Migração para garantir que valor_base pode armazenar texto (tokens criptografados)
     try:
-        # Verifica se o tipo da coluna precisa ser ajustado (SQLite é flexível, mas forçamos TEXT)
         cursor.execute("ALTER TABLE usuarios ADD COLUMN valor_base_secure TEXT DEFAULT '0.0'")
     except: pass
 
@@ -150,8 +169,8 @@ def init_db():
     cursor.execute("SELECT id FROM usuarios WHERE username = 'cnovaes'")
     if not cursor.fetchone():
         cursor.execute(
-            "INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password) "
-            "VALUES ('cnovaes', ?, 'CAIQUE NOVAES', 1, 0)",
+            "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password) "
+            "VALUES ('cnovaes', ?, 'CAIQUE NOVAES', 1, 'ADMIN', 0)",
             (_hash_pw(ADMIN_PWD),)
         )
 
@@ -228,7 +247,7 @@ def processar_solicitacao(sid: int, aprovado: bool):
 # ─────────────────────────────────────────────────────────────────────────────
 def verify_login(username: str, password: str) -> dict | None:
     conn = get_connection()
-    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base FROM usuarios WHERE username = ?", (username,)).fetchone()
+    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios WHERE username = ?", (username,)).fetchone()
     conn.close()
     if row and _check_pw(password, row[2]):
         return {
@@ -237,13 +256,14 @@ def verify_login(username: str, password: str) -> dict | None:
             "nome":        row[3],
             "admin":       bool(row[4]),
             "must_change": bool(row[5]),
-            "valor_base":  _decrypt(row[6])
+            "valor_base":  _decrypt(row[6]),
+            "perfil":      row[7] or "USER"
         }
     return None
 
 def get_user_by_username(username: str) -> dict | None:
     conn = get_connection()
-    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base FROM usuarios WHERE username = ?", (username,)).fetchone()
+    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios WHERE username = ?", (username,)).fetchone()
     conn.close()
     if row:
         return {
@@ -252,38 +272,41 @@ def get_user_by_username(username: str) -> dict | None:
             "nome":        row[3],
             "admin":       bool(row[4]),
             "must_change": bool(row[5]),
-            "valor_base":  _decrypt(row[6])
+            "valor_base":  _decrypt(row[6]),
+            "perfil":      row[7] or "USER"
         }
     return None
 
 def get_all_users() -> list[tuple]:
     conn  = get_connection()
-    rows  = conn.execute("SELECT id, username, nome_completo, is_admin, must_change_password, valor_base FROM usuarios ORDER BY nome_completo COLLATE NOCASE").fetchall()
+    rows  = conn.execute("SELECT id, username, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios ORDER BY nome_completo COLLATE NOCASE").fetchall()
     conn.close()
     # Decrypt salary in memory for listing
-    return [(r[0], r[1], r[2], r[3], r[4], _decrypt(r[5])) for r in rows]
+    return [(r[0], r[1], r[2], r[3], r[4], _decrypt(r[5]), r[6]) for r in rows]
 
-def create_user(username: str, password: str, nome: str, is_admin: bool, valor_base: float = 0.0) -> bool:
+def create_user(username: str, password: str, nome: str, perfil: str, valor_base: float = 0.0) -> bool:
     try:
         conn = get_connection()
+        is_admin = 1 if perfil == 'ADMIN' else 0
         conn.execute(
-            "INSERT INTO usuarios (username, password, nome_completo, is_admin, must_change_password, valor_base) VALUES (?, ?, ?, ?, 1, ?)",
-            (username, _hash_pw(password), nome, 1 if is_admin else 0, _encrypt(valor_base))
+            "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password, valor_base) VALUES (?, ?, ?, ?, ?, 1, ?)",
+            (username, _hash_pw(password), nome, is_admin, perfil, _encrypt(valor_base))
         )
         conn.commit(); conn.close()
         return True
     except: return False
 
-def update_user(uid: int, username: str, nome: str, is_admin: bool, valor_base: float, password: str | None = None) -> bool:
+def update_user(uid: int, username: str, nome: str, perfil: str, valor_base: float, password: str | None = None) -> bool:
     try:
         conn = get_connection()
+        is_admin = 1 if perfil == 'ADMIN' else 0
         if password:
             conn.execute(
-                "UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, password=?, must_change_password=1, valor_base=? WHERE id=?",
-                (username, nome, 1 if is_admin else 0, _hash_pw(password), _encrypt(valor_base), uid)
+                "UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, perfil=?, password=?, must_change_password=1, valor_base=? WHERE id=?",
+                (username, nome, is_admin, perfil, _hash_pw(password), _encrypt(valor_base), uid)
             )
         else:
-            conn.execute("UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, valor_base=? WHERE id=?", (username, nome, 1 if is_admin else 0, _encrypt(valor_base), uid))
+            conn.execute("UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, perfil=?, valor_base=? WHERE id=?", (username, nome, is_admin, perfil, _encrypt(valor_base), uid))
         conn.commit(); conn.close()
         return True
     except: return False
@@ -307,18 +330,21 @@ def delete_user(uid: int):
 # ─────────────────────────────────────────────────────────────────────────────
 # CHAMADOS — CRUD
 # ─────────────────────────────────────────────────────────────────────────────
-def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, vbase_snapshot: float = 0.0):
+def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username: str, vbase_snapshot: float = 0.0):
     conn = get_connection()
     conn.execute(
-        "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, _encrypt(vbase_snapshot))
+        "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo, username, valor_base_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, username, _encrypt(vbase_snapshot))
     )
     conn.commit(); conn.close()
     executar_backup_automatico()
 
-def get_all_chamados() -> list[tuple]:
+def get_all_chamados(username: str | None = None) -> list[tuple]:
     conn  = get_connection()
-    rows  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot FROM chamados ORDER BY data ASC, inicio ASC").fetchall()
+    if username:
+        rows = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados WHERE username = ? ORDER BY data ASC, inicio ASC", (username,)).fetchall()
+    else:
+        rows = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados ORDER BY data ASC, inicio ASC").fetchall()
     conn.close()
     
     res = []
@@ -326,18 +352,19 @@ def get_all_chamados() -> list[tuple]:
         vbs = 0.0
         if len(r) > 9 and r[9]:
             vbs = _decrypt(r[9])
-        res.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], vbs))
+        # r[10] is username
+        res.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], vbs, r[10]))
     return res
 
 def get_chamado_by_id(cid: int) -> tuple | None:
     conn = get_connection()
-    row  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot FROM chamados WHERE id = ?", (cid,)).fetchone()
+    row  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados WHERE id = ?", (cid,)).fetchone()
     conn.close()
     if row:
         vbs = 0.0
         if len(row) > 9 and row[9]:
             vbs = _decrypt(row[9])
-        return (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], vbs)
+        return (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], vbs, row[10])
     return None
 
 def update_chamado(cid, data, caso, rid, hotel, inicio, termino, obs, motivo):
