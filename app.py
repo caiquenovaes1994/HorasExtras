@@ -3,6 +3,7 @@ import pandas    as pd
 from datetime    import datetime, timedelta
 import os
 import extra_streamlit_components as stx
+import time
 
 import database
 import utils
@@ -21,7 +22,13 @@ def _init_db_once():
 _init_db_once()
 
 # Inicializa o CookieManager do extra-streamlit-components
-cookie_manager = stx.CookieManager()
+cookie_manager = stx.CookieManager(key="cookie_manager_primary")
+
+if "cookies_hydrated" not in st.session_state:
+    st.session_state["cookies_hydrated"] = True
+    with st.spinner("Restaurando sessão segura..."):
+        time.sleep(0.1) # Breve pausa para não dar erro visual
+    st.stop()
 
 st.markdown("""
 <style>
@@ -109,7 +116,7 @@ if not st.session_state.logged_in and auth_token:
         if user_data:
             st.session_state.logged_in = True
             st.session_state.user = user_data
-            # A página já carrega e renderiza na sequência normal. Removido o rerun para não encavalar com component return.
+            st.rerun()
 
 # Valida integridade da sessão (protege contra versões antigas no cache)
 if st.session_state.logged_in and (
@@ -119,6 +126,7 @@ if st.session_state.logged_in and (
     st.session_state.logged_in = False
     st.session_state.user      = None
     cookie_manager.delete("auth_token")
+    time.sleep(0.5) # Atraso obrigatório para garantir gravação no iframe antes do rerun
     st.rerun()
 
 
@@ -142,8 +150,8 @@ if not st.session_state.logged_in:
                     # Salva cookie gerando um token seguro válido por 24 horas
                     token = database.encrypt_str(u["username"])
                     expires = datetime.now() + timedelta(hours=24)
-                    cookie_manager.set("auth_token", token, expires_at=expires)
-                    
+                    cookie_manager.set("auth_token", token, expires_at=expires, path="/")
+                    time.sleep(0.5) # Atraso obrigatório para o stx despachar a operação pro browser
                     st.rerun()
                 else:
                     st.error("Usuário ou senha inválidos.")
@@ -433,6 +441,7 @@ with st.sidebar:
         cookie_manager.delete("auth_token")
         for k in list(st.session_state.keys()):
             del st.session_state[k]
+        time.sleep(0.5) # Atraso obrigatório para garantir exclusão no iframe antes do rerun
         st.rerun()
 
     st.markdown("---")
@@ -512,13 +521,13 @@ with TABS[0]:
         c1, c2 = st.columns(2)
         with c1:
             f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
-            f_caso   = st.text_input("Caso / INC", placeholder="Opcional", key="reg_caso")
-            f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Opcional: Selecione ou busque o hotel…", key="reg_hotel")
+            f_caso   = st.text_input("Caso / INC", key="reg_caso")
+            f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel...", key="reg_hotel")
             f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
         with c2:
             f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
             f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
-            f_obs     = st.text_area("Observações", placeholder="Opcional", height=138, key="reg_obs")
+            f_obs     = st.text_area("Observações", height=138, key="reg_obs")
 
         if st.form_submit_button("💾 SALVAR", use_container_width=True):
             if not f_inicio or not f_fim or not f_motivo.strip():
@@ -616,15 +625,12 @@ with TABS[1]:
                 c6.write(r[6])
                 c7.write(r[7] or "—")
                 
-                bt_ver, bt_ed, bt_del = c8.columns(3)
+                bt_ver, bt_ed = c8.columns(2)
                 if bt_ver.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar registro"):
                     st.session_state.dlg_reg_ver = r[0]
                     st.rerun()
                 if bt_ed.button("✏️", key=f"ed_reg_{r[0]}", help="Editar registro"):
                     st.session_state.dlg_reg_editar = r[0]
-                    st.rerun()
-                if bt_del.button("🗑️", key=f"del_reg_{r[0]}", help="Excluir registro"):
-                    st.session_state.dlg_reg_deletar = r[0]
                     st.rerun()
     else:
         st.info("Nenhum registro encontrado.")
