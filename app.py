@@ -549,9 +549,16 @@ with st.sidebar:
             use_container_width=True,
         )
 
-    st.markdown("---")
-    st.caption("Desenvolvido por **Caique Novaes**")
-    st.caption("Desenvolvido com ☕ e Python · 2026\n\n`v1.0.0`")
+    st.sidebar.markdown(
+        """
+        <div style='margin-top: 100px; line-height: 1.1;'>
+            Desenvolvido por <b>Caique Novaes</b><br>
+            Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.1.0</span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTEÚDO PRINCIPAL
@@ -700,8 +707,8 @@ with TAB_HIST:
                         st.session_state.dlg_bulk_delete = True
                         st.rerun()
                 
-            cols_h = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
-            headers = ["", "Data", "Caso", "Hotel", "Início", "Término", "Observações", "Ações"]
+            cols_h = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
+            headers = ["", "Data", "Caso", "Hotel", "Motivo", "Início", "Término", "Observações", "Ações"]
             for col, h in zip(cols_h, headers):
                 col.markdown(f"**{h}**")
             st.divider()
@@ -712,7 +719,7 @@ with TAB_HIST:
                 else: st.session_state.selected_records.discard(r_id)
             
             for r in rows:
-                c0, c1, c2, c4, c5, c6, c7, c8 = st.columns([0.5, 1, 1, 1.8, 1, 1, 1.2, 1.6])
+                c0, c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
                 rid = r[0]
                 
                 # Checkbox sync (Gestor não seleciona pois não deleta em massa)
@@ -723,7 +730,8 @@ with TAB_HIST:
                 dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
                 c1.write(dt_fmt)
                 c2.write(r[2] or "—")
-                c4.write(f"{r[3]} - {r[4]}")
+                c3.write(f"{r[3]} - {r[4]}")
+                c4.write(r[8] or "—")
                 c5.write(r[5])
                 c6.write(r[6])
                 c7.write(r[7] or "—")
