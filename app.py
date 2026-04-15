@@ -13,7 +13,7 @@ import report_generator
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURAÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Controle de Horas Extras", layout="wide")
+st.set_page_config(page_title="Controle de Horas Extras", layout="wide", initial_sidebar_state="expanded")
 
 @st.cache_resource
 def _init_db_once():
@@ -55,14 +55,7 @@ section[data-testid="stSidebar"] h1,
 section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 { color: #ececec; }
 
-/* Ocultar Elementos de Sistema (User Request) */
-.stAppDeployButton { display: none !important; }
-#stStatusWidget { display: none !important; }
-[data-testid="stHeader"] { background: rgba(0,0,0,0) !important; color: #800000 !important; }
 footer { visibility: hidden; }
-
-/* Esconder opções específicas do menu (Record, Print, etc) */
-div[data-testid="stToolbar"] { display: none !important; }
 
 /* Botão Lápis Sidebar (Sem contorno) */
 button[help="Editar perfil"] {
