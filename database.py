@@ -1,8 +1,11 @@
-import sqlite3
 import os
-import shutil
+import csv
 import glob
 from datetime import datetime
+from contextlib import contextmanager
+
+import psycopg2
+from psycopg2 import pool, extras
 import bcrypt
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
@@ -12,10 +15,18 @@ from dotenv import load_dotenv
 # ─────────────────────────────────────────────────────────────────────────────
 load_dotenv()
 
-DB_DIR  = "data"
-DB_NAME = os.path.join(DB_DIR, "horas_extras.db")
-BACKUP_DIR = os.path.join(DB_DIR, "backups")
-EXTERNAL_SOURCE = os.path.join(DB_DIR, "hotels_source.sqlite")
+# Conexão PostgreSQL (Supabase)
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASS", "")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+# Diretórios locais para exportação CSV
+EXPORT_DIR = os.path.join("data", "exports")
+
+# Fonte externa SQLite para sincronização inicial de hotéis (fallback local)
+EXTERNAL_SOURCE = os.path.join("data", "hotels_source.sqlite")
 
 # Chave Secreta para Criptografia de Dados (Salários)
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -24,6 +35,9 @@ ADMIN_PWD  = os.getenv("ADMIN_PWD", "mudar123")
 # Inicializa cifras apenas se a chave estiver presente
 _cipher = Fernet(SECRET_KEY.encode()) if SECRET_KEY else None
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CRIPTOGRAFIA — Fernet (AES) & Bcrypt
+# ─────────────────────────────────────────────────────────────────────────────
 def _encrypt(val: float) -> str:
     """Criptografa um valor numérico para armazenamento (AES)."""
     if not _cipher or val is None: return "0.0"
@@ -64,181 +78,266 @@ def _check_pw(password: str, hashed: str) -> bool:
     except:
         return False
 
-def get_connection() -> sqlite3.Connection:
-    os.makedirs(DB_DIR, exist_ok=True)
-    return sqlite3.connect(DB_NAME, check_same_thread=False, timeout=10)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POOL DE CONEXÕES — PostgreSQL
+# ─────────────────────────────────────────────────────────────────────────────
+_pool: pool.SimpleConnectionPool | None = None
+
+def _init_pool():
+    """Inicializa o pool de conexões PostgreSQL."""
+    global _pool
+    if _pool is None:
+        _pool = pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=5,
+            host=DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            sslmode="require",          # Supabase exige SSL
+            connect_timeout=10,
+            options="-c search_path=public",
+        )
+
+@contextmanager
+def get_db():
+    """Context manager que obtém uma conexão do pool e a devolve ao final.
+
+    Faz commit automático em caso de sucesso e rollback em caso de exceção,
+    garantindo que a conexão seja SEMPRE devolvida ao pool.
+    """
+    _init_pool()
+    conn = _pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INICIALIZAÇÃO E MIGRAÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
 def executar_backup_automatico():
-    """Cria um backup do banco de dados mantendo apenas os 10 mais recentes."""
+    """Registra que o banco opera em nuvem e exporta CSVs locais como segurança extra.
+
+    O Supabase já realiza backups automáticos diários. Esta função exporta as
+    tabelas principais para arquivos CSV locais, mantendo no máximo 10 versões.
+    """
     try:
-        if not os.path.exists(BACKUP_DIR):
-            os.makedirs(BACKUP_DIR, exist_ok=True)
-            
-        if not os.path.exists(DB_NAME):
-            return
-            
+        os.makedirs(EXPORT_DIR, exist_ok=True)
         agora = datetime.now().strftime("%Y%m%d_%H%M%S")
-        bkp_path = os.path.join(BACKUP_DIR, f"backup_{agora}.db")
-        shutil.copy2(DB_NAME, bkp_path)
-        
-        bkps = sorted(glob.glob(os.path.join(BACKUP_DIR, "backup_*.db")))
-        if len(bkps) > 10:
-            para_deletar = bkps[:-10]
-            for f in para_deletar:
-                try: os.remove(f)
-                except: pass
+
+        tabelas = {
+            "chamados": "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, username, valor_base_snapshot FROM chamados",
+            "usuarios": "SELECT id, username, nome_completo, is_admin, perfil, must_change_password FROM usuarios",
+        }
+
+        with get_db() as conn:
+            cur = conn.cursor()
+            for tabela, query in tabelas.items():
+                try:
+                    cur.execute(query)
+                    rows = cur.fetchall()
+                    col_names = [desc[0] for desc in cur.description]
+
+                    csv_path = os.path.join(EXPORT_DIR, f"{tabela}_{agora}.csv")
+                    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerow(col_names)
+                        writer.writerows(rows)
+                except Exception as e:
+                    print(f"[BACKUP CSV] Erro ao exportar '{tabela}': {e}")
+
+        # Rotação: manter apenas os 10 exports mais recentes por tabela
+        for tabela in tabelas:
+            bkps = sorted(glob.glob(os.path.join(EXPORT_DIR, f"{tabela}_*.csv")))
+            if len(bkps) > 10:
+                for f in bkps[:-10]:
+                    try: os.remove(f)
+                    except: pass
+
+        print(f"[BACKUP] Exportação CSV concluída em {agora}. Banco opera em nuvem (Supabase).")
     except Exception as e:
-        print(f"Erro no backup automático: {e}")
+        print(f"[BACKUP] Erro no backup automático: {e}")
+
+
+
 
 def init_db():
-    conn   = get_connection()
-    cursor = conn.cursor()
+    """Cria as tabelas no PostgreSQL e executa migrações de schema."""
+    with get_db() as conn:
+        cur = conn.cursor()
 
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=5000")
+        # ── Criação de Tabelas ────────────────────────────────────────────
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chamados (
+                id              SERIAL PRIMARY KEY,
+                data            DATE        NOT NULL,
+                caso            TEXT,
+                pms             TEXT,
+                hotel           TEXT,
+                inicio          TEXT        NOT NULL,
+                termino         TEXT        NOT NULL,
+                observacoes     TEXT,
+                motivo          TEXT,
+                username        TEXT,
+                valor_base_snapshot TEXT DEFAULT '0.0'
+            )
+        """)
 
-    cursor.executescript("""
-        CREATE TABLE IF NOT EXISTS chamados (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            data        DATE    NOT NULL,
-            caso        TEXT,
-            pms         TEXT,
-            hotel       TEXT,
-            inicio      TIME    NOT NULL,
-            termino     TIME    NOT NULL,
-            observacoes TEXT,
-            motivo      TEXT,
-            username    TEXT
-        );
-        
-        CREATE TABLE IF NOT EXISTS solicitacoes_hoteis (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            rid       TEXT NOT NULL,
-            nome      TEXT NOT NULL,
-            tipo      TEXT NOT NULL,
-            user_id   INTEGER,
-            status    TEXT DEFAULT 'PENDING'
-        );
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS solicitacoes_hoteis (
+                id      SERIAL PRIMARY KEY,
+                rid     TEXT    NOT NULL,
+                nome    TEXT    NOT NULL,
+                tipo    TEXT    NOT NULL,
+                user_id INTEGER,
+                status  TEXT    DEFAULT 'PENDING'
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-            username             TEXT UNIQUE NOT NULL,
-            password             TEXT NOT NULL,
-            nome_completo        TEXT,
-            is_admin             BOOLEAN DEFAULT 0,
-            perfil               TEXT DEFAULT 'USER',
-            must_change_password BOOLEAN DEFAULT 1,
-            valor_base           TEXT DEFAULT '0.0'
-        );
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id                   SERIAL PRIMARY KEY,
+                username             TEXT    UNIQUE NOT NULL,
+                password             TEXT    NOT NULL,
+                nome_completo        TEXT,
+                is_admin             BOOLEAN DEFAULT FALSE,
+                perfil               TEXT    DEFAULT 'USER',
+                must_change_password BOOLEAN DEFAULT TRUE,
+                valor_base           TEXT    DEFAULT '0.0'
+            )
+        """)
 
-        CREATE TABLE IF NOT EXISTS hoteis (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            rid  TEXT UNIQUE,
-            nome TEXT NOT NULL
-        );
-    """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS hoteis (
+                id   SERIAL PRIMARY KEY,
+                rid  TEXT   UNIQUE,
+                nome TEXT   NOT NULL
+            )
+        """)
 
-    # Migrações
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN perfil TEXT DEFAULT 'USER'")
-    except: pass
+        # ── Migrações (idempotentes com savepoints) ──────────────────────
+        migrations = [
+            ("usuarios", "perfil", "TEXT DEFAULT 'USER'"),
+            ("chamados", "username", "TEXT"),
+            ("usuarios", "valor_base_secure", "TEXT DEFAULT '0.0'"),
+            ("chamados", "motivo", "TEXT"),
+            ("chamados", "valor_base_snapshot", "TEXT DEFAULT '0.0'"),
+        ]
+        for table, column, col_type in migrations:
+            try:
+                cur.execute("SAVEPOINT sp_migration")
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                cur.execute("RELEASE SAVEPOINT sp_migration")
+            except psycopg2.errors.DuplicateColumn:
+                cur.execute("ROLLBACK TO SAVEPOINT sp_migration")
+                cur.execute("RELEASE SAVEPOINT sp_migration")
 
-    try:
-        cursor.execute("ALTER TABLE chamados ADD COLUMN username TEXT")
-    except: pass
+        # Sincroniza perfis antigos baseados em is_admin
+        cur.execute("UPDATE usuarios SET perfil = 'ADMIN' WHERE is_admin = TRUE AND (perfil IS NULL OR perfil = 'USER')")
 
-    # Sincroniza perfis antigos baseados em is_admin
-    cursor.execute("UPDATE usuarios SET perfil = 'ADMIN' WHERE is_admin = 1 AND (perfil IS NULL OR perfil = 'USER')")
-    
-    # Atribui registros órfãos ao primeiro admin encontrado para não perder dados na migração
-    cursor.execute("SELECT username FROM usuarios WHERE perfil = 'ADMIN' LIMIT 1")
-    admin_row = cursor.fetchone()
-    if admin_row:
-        cursor.execute("UPDATE chamados SET username = ? WHERE username IS NULL", (admin_row[0],))
+        # Atribui registros órfãos ao primeiro admin encontrado
+        cur.execute("SELECT username FROM usuarios WHERE perfil = 'ADMIN' LIMIT 1")
+        admin_row = cur.fetchone()
+        if admin_row:
+            cur.execute("UPDATE chamados SET username = %s WHERE username IS NULL", (admin_row[0],))
 
-    # Migração para garantir que valor_base pode armazenar texto (tokens criptografados)
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN valor_base_secure TEXT DEFAULT '0.0'")
-    except: pass
+        # Admin padrão baseado no .env
+        cur.execute("SELECT id FROM usuarios WHERE username = 'cnovaes'")
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password) "
+                "VALUES ('cnovaes', %s, 'CAIQUE NOVAES', TRUE, 'ADMIN', FALSE)",
+                (_hash_pw(ADMIN_PWD),)
+            )
 
-    # Admin padrão baseado no .env
-    cursor.execute("SELECT id FROM usuarios WHERE username = 'cnovaes'")
-    if not cursor.fetchone():
-        cursor.execute(
-            "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password) "
-            "VALUES ('cnovaes', ?, 'CAIQUE NOVAES', 1, 'ADMIN', 0)",
-            (_hash_pw(ADMIN_PWD),)
-        )
+        # Hotel padrão
+        cur.execute("INSERT INTO hoteis (rid, nome) VALUES ('B669', 'Ibis Caruaru') ON CONFLICT (rid) DO NOTHING")
 
-    cursor.execute("INSERT OR IGNORE INTO hoteis (rid, nome) VALUES ('B669', 'Ibis Caruaru')")
-
-    try:
-        cursor.execute("ALTER TABLE chamados ADD COLUMN motivo TEXT")
-    except: pass
-
-    try:
-        cursor.execute("ALTER TABLE chamados ADD COLUMN valor_base_snapshot TEXT DEFAULT '0.0'")
-    except: pass
-
-    conn.commit()
-    conn.close()
-    
-    # Sincroniza hotéis externos
-    conn2 = get_connection(); cur2 = conn2.cursor()
-    cur2.execute("SELECT COUNT(*) FROM hoteis"); total = cur2.fetchone()[0]
-    conn2.close()
-    if total <= 1: _sync_hotels()
+    # Sincroniza hotéis externos (fallback local)
+    with get_db() as conn2:
+        cur2 = conn2.cursor()
+        cur2.execute("SELECT COUNT(*) FROM hoteis")
+        total = cur2.fetchone()[0]
+    if total <= 1:
+        _sync_hotels()
 
 
 def _sync_hotels():
-    if not os.path.exists(EXTERNAL_SOURCE): return
+    """Importa hotéis de uma fonte SQLite externa (fallback local)."""
+    if not os.path.exists(EXTERNAL_SOURCE):
+        return
     try:
+        import sqlite3
         ext = sqlite3.connect(EXTERNAL_SOURCE)
         rows = ext.execute("SELECT DISTINCT rid, nome FROM hotels WHERE rid IS NOT NULL AND rid != ''").fetchall()
         ext.close()
-        conn = get_connection(); cursor = conn.cursor()
-        cursor.executemany("INSERT OR IGNORE INTO hoteis (rid, nome) VALUES (?, ?)", rows)
-        conn.commit(); conn.close()
-    except: pass
+
+        with get_db() as conn:
+            cur = conn.cursor()
+            for rid, nome in rows:
+                cur.execute(
+                    "INSERT INTO hoteis (rid, nome) VALUES (%s, %s) ON CONFLICT (rid) DO NOTHING",
+                    (rid, nome)
+                )
+    except Exception as e:
+        print(f"[SYNC] Erro ao sincronizar hotéis: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOTÉIS E SOLICITAÇÕES
 # ─────────────────────────────────────────────────────────────────────────────
 def get_hoteis() -> list[tuple]:
-    conn = get_connection()
-    rows = conn.execute("SELECT DISTINCT rid, nome FROM hoteis WHERE rid IS NOT NULL AND rid != '' ORDER BY rid COLLATE NOCASE ASC").fetchall()
-    conn.close()
-    return rows
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT rid, nome FROM hoteis WHERE rid IS NOT NULL AND rid != '' ORDER BY rid ASC")
+        return cur.fetchall()
 
 def criar_solicitacao_hotel(rid: str, nome: str, tipo: str, user_id: int):
-    conn = get_connection()
-    conn.execute("INSERT INTO solicitacoes_hoteis (rid, nome, tipo, user_id, status) VALUES (?, ?, ?, ?, 'PENDING')", (rid, nome, tipo, user_id))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO solicitacoes_hoteis (rid, nome, tipo, user_id, status) VALUES (%s, %s, %s, %s, 'PENDING')",
+            (rid, nome, tipo, user_id)
+        )
 
 def get_solicitacoes_pendentes() -> list[tuple]:
-    conn = get_connection()
-    rows = conn.execute("SELECT s.id, s.rid, s.nome, s.tipo, u.nome_completo FROM solicitacoes_hoteis s LEFT JOIN usuarios u ON s.user_id = u.id WHERE s.status = 'PENDING'").fetchall()
-    conn.close()
-    return rows
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT s.id, s.rid, s.nome, s.tipo, u.nome_completo "
+            "FROM solicitacoes_hoteis s LEFT JOIN usuarios u ON s.user_id = u.id "
+            "WHERE s.status = 'PENDING'"
+        )
+        return cur.fetchall()
 
 def processar_solicitacao(sid: int, aprovado: bool):
-    conn = get_connection(); cursor = conn.cursor()
-    row = cursor.execute("SELECT rid, nome, tipo FROM solicitacoes_hoteis WHERE id = ?", (sid,)).fetchone()
-    if row:
-        rid, nome, tipo = row
-        if aprovado:
-            if tipo == 'CREATE': cursor.execute("INSERT OR REPLACE INTO hoteis (rid, nome) VALUES (?, ?)", (rid, nome))
-            elif tipo == 'EDIT': cursor.execute("UPDATE hoteis SET nome = ? WHERE rid = ?", (nome, rid))
-            elif tipo == 'DELETE': cursor.execute("DELETE FROM hoteis WHERE rid = ?", (rid,))
-            cursor.execute("UPDATE solicitacoes_hoteis SET status = 'APPROVED' WHERE id = ?", (sid,))
-        else:
-            cursor.execute("UPDATE solicitacoes_hoteis SET status = 'REJECTED' WHERE id = ?", (sid,))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT rid, nome, tipo FROM solicitacoes_hoteis WHERE id = %s", (sid,))
+        row = cur.fetchone()
+        if row:
+            rid, nome, tipo = row
+            if aprovado:
+                if tipo == 'CREATE':
+                    cur.execute(
+                        "INSERT INTO hoteis (rid, nome) VALUES (%s, %s) ON CONFLICT (rid) DO UPDATE SET nome = EXCLUDED.nome",
+                        (rid, nome)
+                    )
+                elif tipo == 'EDIT':
+                    cur.execute("UPDATE hoteis SET nome = %s WHERE rid = %s", (nome, rid))
+                elif tipo == 'DELETE':
+                    cur.execute("DELETE FROM hoteis WHERE rid = %s", (rid,))
+                cur.execute("UPDATE solicitacoes_hoteis SET status = 'APPROVED' WHERE id = %s", (sid,))
+            else:
+                cur.execute("UPDATE solicitacoes_hoteis SET status = 'REJECTED' WHERE id = %s", (sid,))
     executar_backup_automatico()
 
 
@@ -246,9 +345,14 @@ def processar_solicitacao(sid: int, aprovado: bool):
 # USUÁRIOS — CRUD SEGURO
 # ─────────────────────────────────────────────────────────────────────────────
 def verify_login(username: str, password: str) -> dict | None:
-    conn = get_connection()
-    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios WHERE username = ?", (username,)).fetchone()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil "
+            "FROM usuarios WHERE username = %s",
+            (username,)
+        )
+        row = cur.fetchone()
     if row and _check_pw(password, row[2]):
         return {
             "id":          row[0],
@@ -262,9 +366,14 @@ def verify_login(username: str, password: str) -> dict | None:
     return None
 
 def get_user_by_username(username: str) -> dict | None:
-    conn = get_connection()
-    row  = conn.execute("SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios WHERE username = ?", (username,)).fetchone()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil "
+            "FROM usuarios WHERE username = %s",
+            (username,)
+        )
+        row = cur.fetchone()
     if row:
         return {
             "id":          row[0],
@@ -278,116 +387,148 @@ def get_user_by_username(username: str) -> dict | None:
     return None
 
 def get_all_users() -> list[tuple]:
-    conn  = get_connection()
-    rows  = conn.execute("SELECT id, username, nome_completo, is_admin, must_change_password, valor_base, perfil FROM usuarios ORDER BY nome_completo COLLATE NOCASE").fetchall()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, username, nome_completo, is_admin, must_change_password, valor_base, perfil "
+            "FROM usuarios ORDER BY LOWER(nome_completo)"
+        )
+        rows = cur.fetchall()
     # Decrypt salary in memory for listing
     return [(r[0], r[1], r[2], r[3], r[4], _decrypt(r[5]), r[6]) for r in rows]
 
 def create_user(username: str, password: str, nome: str, perfil: str, valor_base: float = 0.0) -> bool:
     try:
-        conn = get_connection()
-        is_admin = 1 if perfil == 'ADMIN' else 0
-        conn.execute(
-            "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password, valor_base) VALUES (?, ?, ?, ?, ?, 1, ?)",
-            (username, _hash_pw(password), nome, is_admin, perfil, _encrypt(valor_base))
-        )
-        conn.commit(); conn.close()
+        is_admin = True if perfil == 'ADMIN' else False
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO usuarios (username, password, nome_completo, is_admin, perfil, must_change_password, valor_base) "
+                "VALUES (%s, %s, %s, %s, %s, TRUE, %s)",
+                (username, _hash_pw(password), nome, is_admin, perfil, _encrypt(valor_base))
+            )
         return True
-    except: return False
+    except:
+        return False
 
 def update_user(uid: int, username: str, nome: str, perfil: str, valor_base: float, password: str | None = None) -> bool:
     try:
-        conn = get_connection()
-        is_admin = 1 if perfil == 'ADMIN' else 0
-        if password:
-            conn.execute(
-                "UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, perfil=?, password=?, must_change_password=1, valor_base=? WHERE id=?",
-                (username, nome, is_admin, perfil, _hash_pw(password), _encrypt(valor_base), uid)
-            )
-        else:
-            conn.execute("UPDATE usuarios SET username=?, nome_completo=?, is_admin=?, perfil=?, valor_base=? WHERE id=?", (username, nome, is_admin, perfil, _encrypt(valor_base), uid))
-        conn.commit(); conn.close()
+        is_admin = True if perfil == 'ADMIN' else False
+        with get_db() as conn:
+            cur = conn.cursor()
+            if password:
+                cur.execute(
+                    "UPDATE usuarios SET username=%s, nome_completo=%s, is_admin=%s, perfil=%s, "
+                    "password=%s, must_change_password=TRUE, valor_base=%s WHERE id=%s",
+                    (username, nome, is_admin, perfil, _hash_pw(password), _encrypt(valor_base), uid)
+                )
+            else:
+                cur.execute(
+                    "UPDATE usuarios SET username=%s, nome_completo=%s, is_admin=%s, perfil=%s, valor_base=%s WHERE id=%s",
+                    (username, nome, is_admin, perfil, _encrypt(valor_base), uid)
+                )
         return True
-    except: return False
+    except:
+        return False
 
 def update_password(uid: int, new_password: str):
-    conn = get_connection()
-    conn.execute("UPDATE usuarios SET password=?, must_change_password=0 WHERE id=?", (_hash_pw(new_password), uid))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE usuarios SET password=%s, must_change_password=FALSE WHERE id=%s", (_hash_pw(new_password), uid))
 
 def reset_password_admin(uid: int):
-    conn = get_connection()
-    conn.execute("UPDATE usuarios SET password=?, must_change_password=1 WHERE id=?", (_hash_pw("mudar123"), uid))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE usuarios SET password=%s, must_change_password=TRUE WHERE id=%s", (_hash_pw("mudar123"), uid))
 
 def delete_user(uid: int):
-    conn = get_connection()
-    conn.execute("DELETE FROM usuarios WHERE id = ?", (uid,))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM usuarios WHERE id = %s", (uid,))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CHAMADOS — CRUD
 # ─────────────────────────────────────────────────────────────────────────────
 def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username: str, vbase_snapshot: float = 0.0):
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo, username, valor_base_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, username, _encrypt(vbase_snapshot))
-    )
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO chamados (data, caso, pms, hotel, inicio, termino, observacoes, motivo, username, valor_base_snapshot) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, username, _encrypt(vbase_snapshot))
+        )
     executar_backup_automatico()
 
 def get_all_chamados(username: str | None = None) -> list[tuple]:
-    conn  = get_connection()
-    if username:
-        rows = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados WHERE username = ? ORDER BY data ASC, inicio ASC", (username,)).fetchall()
-    else:
-        rows = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados ORDER BY data ASC, inicio ASC").fetchall()
-    conn.close()
-    
+    with get_db() as conn:
+        cur = conn.cursor()
+        if username:
+            cur.execute(
+                "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username "
+                "FROM chamados WHERE username = %s ORDER BY data ASC, inicio ASC",
+                (username,)
+            )
+        else:
+            cur.execute(
+                "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username "
+                "FROM chamados ORDER BY data ASC, inicio ASC"
+            )
+        rows = cur.fetchall()
+
     res = []
     for r in rows:
         vbs = 0.0
         if len(r) > 9 and r[9]:
             vbs = _decrypt(r[9])
-        # r[10] is username
-        res.append((r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], vbs, r[10]))
+        # Converter data DATE do PostgreSQL para string 'YYYY-MM-DD' para compatibilidade
+        data_str = r[1].strftime("%Y-%m-%d") if hasattr(r[1], 'strftime') else str(r[1])
+        res.append((r[0], data_str, r[2], r[3], r[4], r[5], r[6], r[7], r[8], vbs, r[10]))
     return res
 
 def get_chamado_by_id(cid: int) -> tuple | None:
-    conn = get_connection()
-    row  = conn.execute("SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username FROM chamados WHERE id = ?", (cid,)).fetchone()
-    conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username "
+            "FROM chamados WHERE id = %s",
+            (cid,)
+        )
+        row = cur.fetchone()
     if row:
         vbs = 0.0
         if len(row) > 9 and row[9]:
             vbs = _decrypt(row[9])
-        return (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], vbs, row[10])
+        # Converter data DATE do PostgreSQL para string 'YYYY-MM-DD' para compatibilidade
+        data_str = row[1].strftime("%Y-%m-%d") if hasattr(row[1], 'strftime') else str(row[1])
+        return (row[0], data_str, row[2], row[3], row[4], row[5], row[6], row[7], row[8], vbs, row[10])
     return None
 
 def update_chamado(cid, data, caso, rid, hotel, inicio, termino, obs, motivo):
-    conn = get_connection()
-    conn.execute("UPDATE chamados SET data=?, caso=?, pms=?, hotel=?, inicio=?, termino=?, observacoes=?, motivo=? WHERE id=?", (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, cid))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE chamados SET data=%s, caso=%s, pms=%s, hotel=%s, inicio=%s, termino=%s, observacoes=%s, motivo=%s WHERE id=%s",
+            (data, caso or "", rid, hotel, inicio, termino, obs or None, motivo, cid)
+        )
     executar_backup_automatico()
 
 def delete_chamado(cid: int):
-    conn = get_connection()
-    conn.execute("DELETE FROM chamados WHERE id = ?", (cid,))
-    conn.commit(); conn.close()
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM chamados WHERE id = %s", (cid,))
     executar_backup_automatico()
 
 def delete_chamados_bulk(cids: list[int]):
-    if not cids: return
-    conn = get_connection()
-    conn.executemany("DELETE FROM chamados WHERE id = ?", [(cid,) for cid in cids])
-    conn.commit()
-    conn.close()
+    if not cids:
+        return
+    with get_db() as conn:
+        cur = conn.cursor()
+        # Usar IN com tupla para deletar em lote de forma eficiente
+        cur.execute("DELETE FROM chamados WHERE id = ANY(%s)", (cids,))
     executar_backup_automatico()
 
 
 if __name__ == "__main__":
     init_db()
-    print("DB inicializado com sucesso (.env ativo).")
+    print("DB PostgreSQL inicializado com sucesso (.env ativo).")

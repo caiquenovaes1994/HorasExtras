@@ -285,7 +285,7 @@ def _dlg_editar_perfil():
         new_pw    = st.text_input("Alterar Minha Senha (em branco = manter)", type="password")
         c1, c2 = st.columns(2)
         if c1.form_submit_button("SALVAR", use_container_width=True):
-            if database.update_user(u["id"], new_uname, new_nome, u["admin"], new_vbase, new_pw or None):
+            if database.update_user(u["id"], new_uname, new_nome, u.get("perfil", "USER"), new_vbase, new_pw or None):
                 st.session_state.user["nome"] = new_nome
                 st.session_state.user["username"] = new_uname
                 st.session_state.user["valor_base"] = new_vbase
@@ -370,11 +370,6 @@ def _dlg_editar_registro():
         if cb2.form_submit_button("CANCELAR", use_container_width=True):
             st.session_state.dlg_reg_editar = None
             st.rerun()
-
-    if st.button("SINCRONIZAR ARQUIVO", use_container_width=True):
-        res = database.import_hotels_from_sqlite()
-        if "Erro" in res: st.error(res)
-        else: st.success(res)
 
 @st.dialog("Confirmar Exclusão em Massa")
 def _dlg_bulk_delete():
