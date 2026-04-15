@@ -367,6 +367,7 @@ def _dlg_editar_registro():
             database.update_chamado(cid, f_data.strftime("%Y-%m-%d"), f_caso.strip(), rid_, hnome_, 
                                     utils.processar_input_horario(f_inicio), 
                                     utils.processar_input_horario(f_fim), f_obs.strip(), f_motivo.strip())
+            st.cache_data.clear()  # Invalida cache para atualizar histórico imediatamente
             st.success("Atualizado!")
             st.session_state.dlg_reg_editar = None
             st.rerun()
@@ -386,6 +387,7 @@ def _dlg_bulk_delete():
         database.delete_chamados_bulk(list(st.session_state.selected_records))
         st.session_state.selected_records.clear()
         st.session_state.dlg_bulk_delete = False
+        st.cache_data.clear()  # Invalida cache para atualizar histórico imediatamente
         st.success("Registros excluídos!")
         st.rerun()
 
@@ -397,8 +399,9 @@ def _dlg_confirmar_delecao():
     c1, c2 = st.columns(2)
     if c1.button("SIM, EXCLUIR", use_container_width=True, type="primary"):
         database.delete_chamado(cid)
-        st.success("Removido!")
         st.session_state.dlg_reg_deletar = None
+        st.cache_data.clear()  # Invalida cache para atualizar histórico imediatamente
+        st.success("Removido!")
         st.rerun()
     if c2.button("NÃO", use_container_width=True):
         st.session_state.dlg_reg_deletar = None
@@ -604,6 +607,7 @@ def render_novo_registro_form():
                         vbase_atual
                     )
                     st.success(f"✅ Registrado!")
+                    st.cache_data.clear()  # Invalida cache para atualizar histórico imediatamente
                     # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
                     st.session_state.reg_reset = True
                     st.rerun()
