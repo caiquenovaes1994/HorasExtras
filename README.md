@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.56-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -18,6 +18,7 @@
 - [Tecnologias](#tecnologias)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Instalação e Execução](#instalação-e-execução)
+- [Variáveis de Ambiente](#variáveis-de-ambiente)
 - [Uso](#uso)
 - [Autor](#autor)
 
@@ -28,6 +29,8 @@
 O **Controle de Horas Extras** é uma aplicação web desenvolvida com **Python e Streamlit** para automatizar o processo de registro, acompanhamento e validação de atendimentos realizados fora do expediente padrão.
 
 O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do relatório PDF (modelo "Folha de Hora Extra") com cálculo automático de horas em **50%** ou **100%**, obedecendo as regras de dias úteis, sábados, domingos e feriados nacionais.
+
+O banco de dados é hospedado em nuvem no **Supabase (PostgreSQL)**, garantindo alta disponibilidade, backups automáticos e compatibilidade com deploys em plataformas como o **Render**.
 
 ---
 
@@ -58,8 +61,7 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 
 - Cadastro e edição de hotéis via **janela modal** (`st.dialog`) com fluxo de aprovação.
 - Solicitações de criação, edição e exclusão passam por aprovação do Administrador.
-- **Base Externa Opcional:** O sistema referencia um arquivo `data/hotels_source.sqlite` para carga massificada de clientes. Caso o arquivo não exista, o sistema opera de forma autônoma com hotéis inseridos manualmente.
-- Garantia de registros únicos com `SELECT DISTINCT` (sem duplicações).
+- Garantia de registros únicos com `ON CONFLICT` nativo do PostgreSQL.
 
 ### Gestão de Usuários (Admin)
 
@@ -70,15 +72,16 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 ### Trava de Base Financeira (Snapshot Salarial)
 
 - **Captura via Snapshot:** O salário vigente é capturado de forma cifrada e atrelado individualmente a cada registro no momento da criação.
-- **Imutabilidade Histórica:** Reajustes salariais (aumentos e dissídios) aplicados ao perfil do usuário não afetam a integridade dos cálculos financeiros de relatórios de meses anteriores.
+- **Imutabilidade Histórica:** Reajustes salariais aplicados ao perfil do usuário não afetam a integridade dos cálculos financeiros de relatórios de meses anteriores.
 - **Fallback Inteligente:** Registros legados sem snapshot utilizam automaticamente o salário atual do perfil como base de cálculo.
 
 ### Registro de Atendimentos
 
 - Máscara de horário automática (ex: digitando `0730` → converte para `07:30`).
 - Campo Caso/INC **opcional** para referência de incidentes.
-- Seleção dinâmica de Hotel/PMS populada diretamente do banco de dados.
+- Seleção dinâmica de Hotel/PMS populada diretamente do banco de dados com **cache de 24 horas** para reduzir latência de rede.
 - Suporte a múltiplos turnos (Plantão 1, 2 e 3) por dia.
+- Formulário de novo registro isolado com **`@st.fragment`**, garantindo que interações não recarregam a página inteira.
 
 ### Relatório PDF de Alta Fidelidade
 
@@ -89,12 +92,17 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 - **Relatório Consolidado ("TODOS")**: Gera um PDF multi-página com um colaborador por página, ideal para gestores e administradores.
 - Ajuste automático para caber em **uma única página A4 paisagem** por colaborador.
 - Cabeçalho profissional com destaque em **cor vinho corporativa** (#800000).
-- Tipografia Inter/Calibri com fallback automático para Helvetica.
 
 ### Exclusão em Massa
 
 - Seleção múltipla de registros no histórico via checkboxes.
 - Confirmação de exclusão em massa via diálogo modal dedicado.
+
+### Backup Local (CSV)
+
+- A cada operação de escrita, o sistema exporta automaticamente as tabelas `chamados` e `usuarios` para arquivos CSV locais.
+- Rotação automática mantendo os **10 exports mais recentes** por tabela.
+- Complementa os backups automáticos diários gerenciados pelo Supabase.
 
 ---
 
@@ -104,12 +112,14 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 | :--- | :--- | :--- |
 | [Python](https://python.org) | 3.12 | Linguagem principal |
 | [Streamlit](https://streamlit.io) | 1.56 | Interface web |
-| [SQLite](https://sqlite.org) | — | Banco de dados local |
+| [PostgreSQL / Supabase](https://supabase.com) | — | Banco de dados em nuvem |
+| [psycopg2-binary](https://pypi.org/project/psycopg2-binary/) | 2.9.11 | Driver PostgreSQL com pool de conexões |
 | [ReportLab](https://reportlab.com) | 4.4 | Geração de relatórios PDF |
 | [Pandas](https://pandas.pydata.org) | 3.0 | Manipulação e agrupamento de dados |
 | [holidays](https://pypi.org/project/holidays/) | 0.94 | Detecção de feriados nacionais (BR) |
 | [bcrypt](https://pypi.org/project/bcrypt/) | — | Hash seguro de senhas |
 | [cryptography](https://pypi.org/project/cryptography/) | — | Criptografia Fernet (AES) |
+| [python-dotenv](https://pypi.org/project/python-dotenv/) | — | Carregamento de variáveis de ambiente |
 | [extra-streamlit-components](https://pypi.org/project/extra-streamlit-components/) | 0.1.71 | Cookie Manager para sessão persistente |
 
 ---
@@ -119,19 +129,19 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 ```text
 HorasExtras/
 │
-├── app.py               # Interface principal (Streamlit) e controle de sessão
-├── database.py          # Camada de acesso ao banco de dados (CRUD + criptografia)
-├── report_generator.py  # Geração de relatórios em PDF (ReportLab)
-├── utils.py             # Funções auxiliares (cálculos, máscaras, período)
+├── app.py                   # Interface principal (Streamlit) e controle de sessão
+├── database.py              # Camada de acesso ao banco de dados (CRUD + criptografia)
+├── report_generator.py      # Geração de relatórios em PDF (ReportLab)
+├── utils.py                 # Funções auxiliares (cálculos, máscaras, período)
+├── migrate_sqlite_to_pg.py  # Script utilitário de migração SQLite → PostgreSQL
 │
-├── data/                # Diretório de dados locais (ignorado pelo Git)
-│   ├── horas_extras.db  # Banco de dados principal (SQLite)
-│   └── backups/         # Backups automáticos do banco de dados
+├── data/                    # Diretório de dados locais (ignorado pelo Git)
+│   └── exports/             # Exportações CSV automáticas de backup
 │
-├── .env                 # Variáveis de ambiente (SECRET_KEY, ADMIN_PWD)
-├── .env.example         # Modelo de referência para o .env
-├── requirements.txt     # Dependências do projeto
-├── start.bat            # Script de inicialização automática (Windows)
+├── .env                     # Variáveis de ambiente (não versionado)
+├── .env.example             # Modelo de referência para o .env
+├── requirements.txt         # Dependências do projeto
+├── start.bat                # Script de inicialização automática (Windows)
 └── README.md
 ```
 
@@ -142,6 +152,7 @@ HorasExtras/
 ### Pré-requisitos
 
 - [Python 3.10+](https://www.python.org/downloads/) instalado e disponível no `PATH`
+- Uma instância do **Supabase** criada (plano gratuito é suficiente)
 
 ### Passo a Passo
 
@@ -152,16 +163,29 @@ git clone https://github.com/caiquenovaes1994/HorasExtras.git
 cd HorasExtras
 ```
 
-#### 2. Configuração de Ambiente (.env)
+#### 2. Configure as variáveis de ambiente
 
-Crie um arquivo `.env` na raiz do projeto (ou copie o `.env.example`) com as seguintes chaves:
+Crie um arquivo `.env` na raiz do projeto (ou copie o `.env.example`) e preencha com suas credenciais:
 
 ```env
 SECRET_KEY=sua_chave_fernet_aqui
 ADMIN_PWD=sua_senha_admin_inicial
+
+# Conexão PostgreSQL (Supabase)
+DB_HOST=aws-0-sa-east-1.pooler.supabase.com
+DB_PORT=6543
+DB_NAME=postgres
+DB_USER=postgres.seu_project_id
+DB_PASS=sua_senha_do_supabase
 ```
 
-> **Nota:** A `SECRET_KEY` deve ser um token Fernet válido de 32 bytes codificado em Base64. Gere uma com: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+> **Nota:** A `SECRET_KEY` deve ser um token Fernet válido de 32 bytes. Gere com:
+>
+> ```bash
+> python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+> ```
+
+> **Nota:** Para obter as credenciais do Supabase, acesse **Project Settings → Database → Connection pooling** e use o host/porta do **Transaction Pooler** (porta `6543`) para compatibilidade com IPv4.
 
 #### 3. Execute o script de inicialização
 
@@ -171,13 +195,35 @@ O arquivo `start.bat` automatiza todo o processo: cria o ambiente virtual, insta
 ./start.bat
 ```
 
-#### 4. Acesse a aplicação no navegador
+#### 4. Inicialize o banco de dados
+
+Na primeira execução, as tabelas são criadas automaticamente ao iniciar o app. Opcionalmente, para migrar dados de uma instância SQLite anterior:
+
+```bash
+python migrate_sqlite_to_pg.py
+```
+
+#### 5. Acesse a aplicação no navegador
 
 ```text
 http://localhost:3003
 ```
 
 > **Login padrão (primeiro acesso):** Utilize as credenciais de administrador definidas no arquivo `.env`. O sistema exigirá a troca de senha no primeiro login.
+
+---
+
+## Variáveis de Ambiente
+
+| Variável | Descrição | Obrigatória |
+| :--- | :--- | :---: |
+| `SECRET_KEY` | Chave Fernet para criptografia de dados sensíveis | ✅ |
+| `ADMIN_PWD` | Senha inicial do usuário administrador padrão | ✅ |
+| `DB_HOST` | Host do banco PostgreSQL (Transaction Pooler do Supabase) | ✅ |
+| `DB_PORT` | Porta de conexão (use `6543` para o Transaction Pooler) | ✅ |
+| `DB_NAME` | Nome do banco de dados (padrão: `postgres`) | ✅ |
+| `DB_USER` | Usuário do banco (formato: `postgres.seu_project_id`) | ✅ |
+| `DB_PASS` | Senha do banco de dados | ✅ |
 
 ---
 
