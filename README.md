@@ -186,7 +186,7 @@ DB_PASS=sua_senha_do_supabase
 > python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 > ```
 
-> **Nota:** Para obter as credenciais do Supabase, acesse **Project Settings → Database → Connection pooling** e use o host/porta do **Transaction Pooler** (porta `6543`) para compatibilidade com IPv4.
+**Nota:** Para obter as credenciais do Supabase, acesse **Project Settings → Database → Connection pooling** e use o host/porta do **Transaction Pooler** (porta `6543`) para compatibilidade com IPv4.
 
 #### 3. Execute o script de inicialização
 
