@@ -22,6 +22,16 @@ def _init_db_once():
 
 _init_db_once()
 
+@st.cache_data(ttl=86400)
+def get_cached_hoteis():
+    """Cache de longa duração para lista de hotéis (24h)."""
+    return database.get_hoteis()
+
+@st.cache_data(ttl=300)
+def get_cached_chamados(username_filter):
+    """Cache de curta duração para chamados do histórico (5min)."""
+    return database.get_all_chamados(username_filter)
+
 # Inicializa o CookieManager
 cookie_manager = stx.CookieManager(key="cookie_manager_primary")
 
@@ -343,7 +353,7 @@ def _dlg_editar_registro():
         f_data = st.date_input("Data", value=datetime.strptime(row[1], "%Y-%m-%d"))
         f_caso = st.text_input("Caso / INC", value=row[2] or "")
         
-        h_rows = database.get_hoteis()
+        h_rows = get_cached_hoteis()
         h_opts = [f"{r} - {n}" for r, n in h_rows]
         current_h = f"{row[3]} - {row[4]}"
         try:
@@ -549,9 +559,63 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown('<h1 class="page-title">CONTROLE DE HORAS EXTRAS</h1>', unsafe_allow_html=True)
 
-# Hotéis carregados UMA VEZ por rerun (lista limpa, sem append global)
-h_rows = database.get_hoteis()
+# Hotéis carregados via cache para reduzir latência
+h_rows = get_cached_hoteis()
 h_opts = [f"{r} - {n}" for r, n in h_rows]
+
+@st.fragment
+def render_novo_registro_form():
+    # Lógica de Reset Seguro (Evita erro de 'instantiated widget')
+    if st.session_state.get("reg_reset"):
+        st.session_state.reg_data    = datetime.now()
+        st.session_state.reg_caso    = ""
+        st.session_state.reg_hotel   = None
+        st.session_state.reg_motivo  = ""
+        st.session_state.reg_inicio  = ""
+        st.session_state.reg_termino = ""
+        st.session_state.reg_obs     = ""
+        st.session_state.reg_reset   = False
+
+    st.subheader("Inserir Novo Chamado")
+    with st.form("frm_novo_reg", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
+            f_caso   = st.text_input("Caso / INC", key="reg_caso")
+            f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel...", key="reg_hotel")
+            f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
+        with c2:
+            f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
+            f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
+            f_obs     = st.text_area("Observações", height=138, key="reg_obs")
+
+        if st.form_submit_button("💾 SALVAR", use_container_width=True):
+            if not f_inicio or not f_fim or not f_motivo.strip():
+                st.error("Campos obrigatórios: Início, Término e Motivo.")
+            else:
+                try:
+                    rid_, hnome_ = ("", "")
+                    if f_hsel:
+                        rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
+                    
+                    ti = utils.processar_input_horario(f_inicio)
+                    tf = utils.processar_input_horario(f_fim)
+                    vbase_atual = float(st.session_state.user.get("valor_base", 0.0))
+                    database.save_chamado(
+                        f_data.strftime("%Y-%m-%d"),
+                        f_caso.strip() or None,
+                        rid_, hnome_, ti, tf,
+                        f_obs.strip() or None,
+                        f_motivo.strip(),
+                        st.session_state.user["username"],
+                        vbase_atual
+                    )
+                    st.success(f"✅ Registrado!")
+                    # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
+                    st.session_state.reg_reset = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
 
 u_perfil = st.session_state.user.get("perfil", "USER")
 is_admin = u_perfil == "ADMIN"
@@ -581,57 +645,7 @@ TAB_APROV = tab_map.get("🔔 Aprovações")
 # ── ABA 0 – Novo Registro ─────────────────────────────────────────────────────
 if TAB_REG:
     with TAB_REG:
-        # Lógica de Reset Seguro (Evita erro de 'instantiated widget')
-        if st.session_state.get("reg_reset"):
-            st.session_state.reg_data    = datetime.now()
-            st.session_state.reg_caso    = ""
-            st.session_state.reg_hotel   = None
-            st.session_state.reg_motivo  = ""
-            st.session_state.reg_inicio  = ""
-            st.session_state.reg_termino = ""
-            st.session_state.reg_obs     = ""
-            st.session_state.reg_reset   = False
-
-        st.subheader("Inserir Novo Chamado")
-        with st.form("frm_novo_reg", clear_on_submit=False):
-            c1, c2 = st.columns(2)
-            with c1:
-                f_data   = st.date_input("Data do Atendimento", format="DD/MM/YYYY", key="reg_data")
-                f_caso   = st.text_input("Caso / INC", key="reg_caso")
-                f_hsel   = st.selectbox("Hotel", options=h_opts, index=None, placeholder="Selecione ou busque o hotel...", key="reg_hotel")
-                f_motivo = st.text_input("Motivo *", placeholder="Descreva o motivo do chamado...", key="reg_motivo")
-            with c2:
-                f_inicio  = st.text_input("Início *",  placeholder="08:00", key="reg_inicio")
-                f_fim     = st.text_input("Término *", placeholder="17:00", key="reg_termino")
-                f_obs     = st.text_area("Observações", height=138, key="reg_obs")
-
-            if st.form_submit_button("💾 SALVAR", use_container_width=True):
-                if not f_inicio or not f_fim or not f_motivo.strip():
-                    st.error("Campos obrigatórios: Início, Término e Motivo.")
-                else:
-                    try:
-                        rid_, hnome_ = ("", "")
-                        if f_hsel:
-                            rid_, hnome_ = (f_hsel.split(" - ", 1) if " - " in f_hsel else ("", f_hsel))
-                        
-                        ti = utils.processar_input_horario(f_inicio)
-                        tf = utils.processar_input_horario(f_fim)
-                        vbase_atual = float(st.session_state.user.get("valor_base", 0.0))
-                        database.save_chamado(
-                            f_data.strftime("%Y-%m-%d"),
-                            f_caso.strip() or None,
-                            rid_, hnome_, ti, tf,
-                            f_obs.strip() or None,
-                            f_motivo.strip(),
-                            st.session_state.user["username"],
-                            vbase_atual
-                        )
-                        st.success(f"✅ Registrado!")
-                        # Ativa o reset para a próxima execução (evita o erro de widget instanciado)
-                        st.session_state.reg_reset = True
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
+        render_novo_registro_form()
 
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────
@@ -653,7 +667,7 @@ with TAB_HIST:
             m = re.search(r"\((.*)\)", selected_usr_hist)
             if m: username_filter = m.group(1)
 
-    rows_all = database.get_all_chamados(username_filter)
+    rows_all = get_cached_chamados(username_filter)
     if rows_all:
         # Filtros de Histórico
         c_h1, c_h2 = st.columns(2)
@@ -819,6 +833,7 @@ if is_admin and TAB_APROV:
                 bt_ap, bt_rj = ce.columns(2)
                 if bt_ap.button("✅", key=f"ap_{sid}"):
                     database.processar_solicitacao(sid, True)
+                    st.cache_data.clear() # Limpa o cache para atualizar lista de hotéis
                     st.rerun()
                 if bt_rj.button("❌", key=f"rj_{sid}"):
                     database.processar_solicitacao(sid, False)
