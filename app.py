@@ -549,6 +549,9 @@ with st.sidebar:
             use_container_width=True,
         )
 
+    st.markdown("---")
+    st.caption("Desenvolvido por **Caique Novaes**")
+    st.caption("Desenvolvido com ☕ e Python · 2026\n\n`v1.0.0`")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTEÚDO PRINCIPAL
