@@ -450,7 +450,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📅 Relatório PDF")
 
-    u_perfil = u.get("perfil", "USER").upper()
+    u_perfil = u.get("perfil", "USER").strip().upper()
     is_gestor = u_perfil == "GESTOR"
     is_admin  = u_perfil == "ADMIN"
 
@@ -556,7 +556,7 @@ with st.sidebar:
         <div style='margin-top: 100px; line-height: 1.1;'>
             Desenvolvido por <b>Caique Novaes</b><br>
             Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
-            <span style='color: #2ecc71; font-weight: bold;'>v1.2.0</span>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.2.1</span>
         </div>
         """, 
         unsafe_allow_html=True
@@ -626,7 +626,7 @@ def render_novo_registro_form():
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-u_perfil = st.session_state.user.get("perfil", "USER").upper()
+u_perfil = st.session_state.user.get("perfil", "USER").strip().upper()
 is_admin = u_perfil == "ADMIN"
 is_gestor = u_perfil == "GESTOR"
 
@@ -659,11 +659,8 @@ if TAB_REG:
 
 # ── ABA 1 – Histórico ────────────────────────────────────────────────────────
 with TAB_HIST:
-    # Lógica de filtragem inicial: Se for USER, ele só vê o dele.
-    # Se for ADMIN ou GESTOR, pode ver tudo.
-    username_filter = None
-    if u_perfil == "USER":
-        username_filter = st.session_state.user["username"]
+    # Lógica de filtragem inicial: Se for USER, ele só vê o dele (Trava v1.2.1)
+    username_filter = st.session_state.user["username"] if u_perfil == "USER" else None
     
     # Se for Admin ou Gestor, exibe o seletor de plantonista
     selected_usr_hist = "TODOS"

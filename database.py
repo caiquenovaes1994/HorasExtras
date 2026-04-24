@@ -461,20 +461,24 @@ def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username:
     executar_backup_automatico()
 
 def get_all_chamados(username_filter: str | None = None, perfil: str | None = None, logged_username: str | None = None) -> list[tuple]:
+    # Normalização do perfil para garantir consistência nas checagens
+    perfil_norm = str(perfil).strip().upper() if perfil else 'USER'
+    
     # LOG DE SEGURANÇA (Para monitoramento no console do Render/Docker)
-    print(f"[SECURITY LOG] Perfil: {perfil}, LoggedUser: {logged_username}, FilterRequested: {username_filter}")
+    print(f"[SECURITY LOG] Perfil: {perfil_norm}, LoggedUser: {logged_username}, FilterRequested: {username_filter}")
 
     with get_db() as conn:
         cur = conn.cursor()
         
         # Trava de Segurança Estrita: Se for USER, ignora o filtro externo e usa o username logado
-        if perfil and perfil.upper() == 'USER':
+        if perfil_norm == 'USER':
             final_username = logged_username
-            if not final_username:
-                # Caso extremo de erro de sessão, forçamos um valor inexistente para segurança
-                final_username = "FORCED_UNAUTHORIZED_ACCESS"
         else:
             final_username = username_filter
+
+        # Trava de Segurança: Se não houver filtro e não for ADMIN/GESTOR, bloqueia acesso para evitar fallback geral
+        if not final_username and perfil_norm not in ['ADMIN', 'GESTOR']:
+            return []
 
         if final_username:
             cur.execute(
@@ -483,6 +487,7 @@ def get_all_chamados(username_filter: str | None = None, perfil: str | None = No
                 (final_username,)
             )
         else:
+            # Apenas ADMIN e GESTOR chegam aqui sem final_username (filtro TODOS)
             cur.execute(
                 "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username "
                 "FROM chamados ORDER BY data ASC, inicio ASC"
