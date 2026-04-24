@@ -450,7 +450,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📅 Relatório PDF")
 
-    u_perfil = u.get("perfil", "USER")
+    u_perfil = u.get("perfil", "USER").upper()
     is_gestor = u_perfil == "GESTOR"
     is_admin  = u_perfil == "ADMIN"
 
@@ -460,7 +460,7 @@ with st.sidebar:
     target_vbase     = u.get("valor_base", 0.0)
     
     selected_target = "MEU RELATÓRIO"
-    if is_gestor or is_admin:
+    if u_perfil in ['ADMIN', 'GESTOR']:
         all_users = database.get_all_users()
         u_opts = ["Consolidado"] + [f"{usr[2]} ({usr[1]})" for usr in all_users]
         selected_target = st.selectbox("Colaborador", u_opts)
@@ -522,7 +522,9 @@ with st.sidebar:
                     if os.path.exists(path): os.remove(path)
                     st.success("✅ PDF Consolidado gerado!")
             else:
-                # PDF Individual
+                # PDF Individual - Força o username do usuário se não for Admin/Gestor
+                if u_perfil not in ['ADMIN', 'GESTOR']:
+                    target_username = u["username"]
                 rows = database.get_all_chamados(target_username, perfil=u_perfil, logged_username=u["username"])
                 df = pd.DataFrame(rows, columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot", "username"])
                 df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
@@ -624,7 +626,7 @@ def render_novo_registro_form():
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
 
-u_perfil = st.session_state.user.get("perfil", "USER")
+u_perfil = st.session_state.user.get("perfil", "USER").upper()
 is_admin = u_perfil == "ADMIN"
 is_gestor = u_perfil == "GESTOR"
 
@@ -665,7 +667,7 @@ with TAB_HIST:
     
     # Se for Admin ou Gestor, exibe o seletor de plantonista
     selected_usr_hist = "TODOS"
-    if is_admin or is_gestor:
+    if u_perfil in ['ADMIN', 'GESTOR']:
         all_usrs = database.get_all_users()
         u_opts_hist = ["TODOS"] + [f"{usr[2]} ({usr[1]})" for usr in all_usrs]
         selected_usr_hist = st.selectbox("Filtrar por Plantonista", u_opts_hist, key="hist_user_filter")

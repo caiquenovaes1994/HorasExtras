@@ -461,12 +461,18 @@ def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username:
     executar_backup_automatico()
 
 def get_all_chamados(username_filter: str | None = None, perfil: str | None = None, logged_username: str | None = None) -> list[tuple]:
+    # LOG DE SEGURANÇA (Para monitoramento no console do Render/Docker)
+    print(f"[SECURITY LOG] Perfil: {perfil}, LoggedUser: {logged_username}, FilterRequested: {username_filter}")
+
     with get_db() as conn:
         cur = conn.cursor()
         
-        # Trava de Segurança: Se for USER, ignora o filtro externo e usa o username logado
-        if perfil == 'USER' and logged_username:
+        # Trava de Segurança Estrita: Se for USER, ignora o filtro externo e usa o username logado
+        if perfil and perfil.upper() == 'USER':
             final_username = logged_username
+            if not final_username:
+                # Caso extremo de erro de sessão, forçamos um valor inexistente para segurança
+                final_username = "FORCED_UNAUTHORIZED_ACCESS"
         else:
             final_username = username_filter
 
