@@ -28,9 +28,9 @@ def get_cached_hoteis():
     return database.get_hoteis()
 
 @st.cache_data(ttl=300)
-def get_cached_chamados(username_filter):
+def get_cached_chamados(username_filter=None, perfil=None, logged_username=None):
     """Cache de curta duração para chamados do histórico (5min)."""
-    return database.get_all_chamados(username_filter)
+    return database.get_all_chamados(username_filter, perfil, logged_username)
 
 # Inicializa o CookieManager
 cookie_manager = stx.CookieManager(key="cookie_manager_primary")
@@ -462,10 +462,10 @@ with st.sidebar:
     selected_target = "MEU RELATÓRIO"
     if is_gestor or is_admin:
         all_users = database.get_all_users()
-        u_opts = ["TODOS"] + [f"{usr[2]} ({usr[1]})" for usr in all_users]
+        u_opts = ["Consolidado"] + [f"{usr[2]} ({usr[1]})" for usr in all_users]
         selected_target = st.selectbox("Colaborador", u_opts)
         
-        if selected_target != "TODOS":
+        if selected_target != "Consolidado":
             # Extrair username entre parênteses
             m = re.search(r"\((.*)\)", selected_target)
             if m:
@@ -484,9 +484,9 @@ with st.sidebar:
 
     if st.button("🚀 GERAR PDF", use_container_width=True):
         try:
-            if selected_target == "TODOS":
+            if selected_target == "Consolidado":
                 # Lógica de PDF Consolidado
-                rows_all = database.get_all_chamados()
+                rows_all = database.get_all_chamados(perfil=u_perfil, logged_username=u["username"])
                 # Filtrar apenas o período desejado globalmente
                 df_all = pd.DataFrame(rows_all, columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot", "username"])
                 
@@ -523,7 +523,7 @@ with st.sidebar:
                     st.success("✅ PDF Consolidado gerado!")
             else:
                 # PDF Individual
-                rows = database.get_all_chamados(target_username)
+                rows = database.get_all_chamados(target_username, perfil=u_perfil, logged_username=u["username"])
                 df = pd.DataFrame(rows, columns=["id","data","caso","pms","hotel","inicio","termino","observacoes", "motivo", "valor_base_snapshot", "username"])
                 df_ag = utils.agrupar_por_data(df, m_sel, a_sel)
                 path = f"folha_horas_{target_user_name.replace(' ', '_')}_{m_sel}_{a_sel}.pdf"
@@ -554,7 +554,7 @@ with st.sidebar:
         <div style='margin-top: 100px; line-height: 1.1;'>
             Desenvolvido por <b>Caique Novaes</b><br>
             Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
-            <span style='color: #2ecc71; font-weight: bold;'>v1.1.0</span>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.2.0</span>
         </div>
         """, 
         unsafe_allow_html=True
@@ -674,7 +674,7 @@ with TAB_HIST:
             m = re.search(r"\((.*)\)", selected_usr_hist)
             if m: username_filter = m.group(1)
 
-    rows_all = get_cached_chamados(username_filter)
+    rows_all = get_cached_chamados(username_filter, u_perfil, st.session_state.user["username"])
     if rows_all:
         # Filtros de Histórico
         c_h1, c_h2 = st.columns(2)

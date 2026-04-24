@@ -460,14 +460,21 @@ def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username:
         )
     executar_backup_automatico()
 
-def get_all_chamados(username: str | None = None) -> list[tuple]:
+def get_all_chamados(username_filter: str | None = None, perfil: str | None = None, logged_username: str | None = None) -> list[tuple]:
     with get_db() as conn:
         cur = conn.cursor()
-        if username:
+        
+        # Trava de Segurança: Se for USER, ignora o filtro externo e usa o username logado
+        if perfil == 'USER' and logged_username:
+            final_username = logged_username
+        else:
+            final_username = username_filter
+
+        if final_username:
             cur.execute(
                 "SELECT id, data, caso, pms, hotel, inicio, termino, observacoes, motivo, valor_base_snapshot, username "
                 "FROM chamados WHERE username = %s ORDER BY data ASC, inicio ASC",
-                (username,)
+                (final_username,)
             )
         else:
             cur.execute(
