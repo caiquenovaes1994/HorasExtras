@@ -348,7 +348,7 @@ def verify_login(username: str, password: str) -> dict | None:
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil "
+            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil, aceitou_termos "
             "FROM usuarios WHERE username = %s",
             (username,)
         )
@@ -361,15 +361,28 @@ def verify_login(username: str, password: str) -> dict | None:
             "admin":       bool(row[4]),
             "must_change": bool(row[5]),
             "valor_base":  _decrypt(row[6]),
-            "perfil":      row[7] or "USER"
+            "perfil":      row[7] or "USER",
+            "aceitou_termos": bool(row[8]) if len(row) > 8 and row[8] is not None else False
         }
     return None
+
+def registrar_aceite(username: str):
+    import pytz
+    fuso_sp = pytz.timezone('America/Sao_Paulo')
+    data_atual_sp = datetime.now(fuso_sp)
+    
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE usuarios SET aceitou_termos = TRUE, data_aceite = %s WHERE username = %s",
+            (data_atual_sp, username)
+        )
 
 def get_user_by_username(username: str) -> dict | None:
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil "
+            "SELECT id, username, password, nome_completo, is_admin, must_change_password, valor_base, perfil, aceitou_termos "
             "FROM usuarios WHERE username = %s",
             (username,)
         )
@@ -382,7 +395,8 @@ def get_user_by_username(username: str) -> dict | None:
             "admin":       bool(row[4]),
             "must_change": bool(row[5]),
             "valor_base":  _decrypt(row[6]),
-            "perfil":      row[7] or "USER"
+            "perfil":      row[7] or "USER",
+            "aceitou_termos": bool(row[8]) if len(row) > 8 and row[8] is not None else False
         }
     return None
 

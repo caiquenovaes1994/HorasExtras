@@ -196,6 +196,42 @@ if st.session_state.user.get("must_change"):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ACEITE DE TERMOS DE USO (LGPD)
+# ─────────────────────────────────────────────────────────────────────────────
+if not st.session_state.user.get("aceitou_termos"):
+    st.markdown('<h1 class="page-title">TERMOS DE USO E POLÍTICA DE PRIVACIDADE</h1>', unsafe_allow_html=True)
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.warning(
+            "### Resumo Importante (LGPD)\n\n"
+            "Ao utilizar este sistema, você concorda com o registro de suas jornadas de trabalho "
+            "e com a criptografia de seus dados financeiros (como salário base). "
+            "Essas medidas visam a segurança jurídica e a conformidade com a LGPD."
+        )
+        
+        with st.expander("📄 Ler Termos de Uso e Política de Privacidade Completos"):
+            st.markdown(
+                "#### 1. Coleta de Dados\n"
+                "Coletamos dados de identificação (nome, usuário) e registros de jornada (horários de início e término) "
+                "estritamente para o cálculo de horas extras.\n\n"
+                "#### 2. Segurança\n"
+                "Seus dados financeiros são armazenados de forma criptografada (AES-256) no banco de dados.\n\n"
+                "#### 3. Direitos do Titular\n"
+                "Você pode solicitar a revisão ou exclusão de seus dados conforme a LGPD, desde que "
+                "não conflitem com obrigações legais de registro de ponto."
+            )
+            
+        if st.button("✅ Li e aceito os Termos de Uso", use_container_width=True):
+            database.registrar_aceite(st.session_state.user["username"])
+            st.session_state.user["aceitou_termos"] = True
+            st.success("Termos aceitos com sucesso! Acessando o sistema...")
+            time.sleep(1)
+            st.rerun()
+            
+    st.stop()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MODAIS  (st.dialog)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -571,7 +607,7 @@ with st.sidebar:
         <div style='margin-top: 100px; line-height: 1.1;'>
             Desenvolvido por <b>Caique Novaes</b><br>
             Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
-            <span style='color: #2ecc71; font-weight: bold;'>v1.2.3</span>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.3.0</span>
         </div>
         """, 
         unsafe_allow_html=True

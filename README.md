@@ -6,7 +6,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-1.2.3-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.2.3.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.3.0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
@@ -149,7 +149,8 @@ HorasExtras/
 ├── RELEASE_NOTES_v1.2.md     # Notas da versão 1.2.0
 ├── RELEASE_NOTES_v1.2.1.md   # Notas da versão 1.2.1
 ├── RELEASE_NOTES_v1.2.2.md   # Notas da versão 1.2.2
-├── RELEASE_NOTES_v1.2.3.md   # Notas da versão atual (estabilização)
+├── RELEASE_NOTES_v1.2.3.md   # Notas da versão 1.2.3
+├── RELEASE_NOTES_v1.3.0.md   # Notas da versão atual (compliance)
 └── README.md
 ```
 
@@ -265,6 +266,7 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 | Versão | Data | Descrição |
 | :--- | :--- | :--- |
+| **v1.3.0** | Abr/2026 | Conformidade legal (LGPD) com aceite obrigatório de Termos de Uso. |
 | **v1.2.3** | Abr/2026 | Novo motor de cálculo de duração e automação de fuso horário (Brasília). |
 | **v1.2.2** | Abr/2026 | Otimização de latência (migração para Ohio), upgrade de dados (chaves primárias para bigint/int8). |
 | **v1.2.1** | Abr/2026 | Hotfix crítico: reforço do Security Lock com normalização de perfil e bloqueio de fallback geral na query. |
@@ -272,7 +274,7 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 | **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
 | **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
 
-> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.2.3.md](RELEASE_NOTES_v1.2.3.md).
+> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.3.0.md](RELEASE_NOTES_v1.3.0.md).
 
 ---
 
@@ -285,4 +287,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v1.2.3
+Desenvolvido com ☕ e Python · 2026 · v1.3.0
