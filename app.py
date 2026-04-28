@@ -9,11 +9,19 @@ import re
 import database
 import utils
 import report_generator
-import pytz
 
-# Captura o horário de São Paulo (Brasília)
-fuso_sp = pytz.timezone('America/Sao_Paulo')
-data_atual_sp = datetime.now(fuso_sp)
+# Captura o horário de São Paulo (Brasília) com fallback seguro
+try:
+    import pytz
+    fuso_sp = pytz.timezone('America/Sao_Paulo')
+    data_atual_sp = datetime.now(fuso_sp)
+except ImportError:
+    try:
+        from zoneinfo import ZoneInfo
+        data_atual_sp = datetime.now(ZoneInfo('America/Sao_Paulo'))
+    except ImportError:
+        data_atual_sp = datetime.now()
+
 mes_atual = data_atual_sp.month
 ano_atual = data_atual_sp.year
 
