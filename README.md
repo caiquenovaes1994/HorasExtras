@@ -6,7 +6,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-1.2.2-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.2.2.md)
+[![Version](https://img.shields.io/badge/version-1.2.3-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.2.3.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
@@ -32,7 +32,7 @@ O **Controle de Horas Extras** é uma aplicação web desenvolvida com **Python 
 
 O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do relatório PDF (modelo **"Folha de Hora Extra"**) com cálculo automático de horas em **50%** ou **100%**, respeitando as regras de dias úteis, sábados, domingos e feriados nacionais brasileiros.
 
-O banco de dados é hospedado em nuvem no **Supabase (PostgreSQL)**, garantindo alta disponibilidade, backups automáticos e compatibilidade com deploys em plataformas como o **Render**.
+O banco de dados é hospedado em nuvem no **Supabase (PostgreSQL)** localizado na região **Ohio (us-east-2)**, garantindo alta disponibilidade, backups automáticos e altíssima performance.
 
 ---
 
@@ -148,7 +148,8 @@ HorasExtras/
 ├── start.bat                 # Script de inicialização automática (Windows)
 ├── RELEASE_NOTES_v1.2.md     # Notas da versão 1.2.0
 ├── RELEASE_NOTES_v1.2.1.md   # Notas da versão 1.2.1
-├── RELEASE_NOTES_v1.2.2.md   # Notas da versão atual (infraestrutura)
+├── RELEASE_NOTES_v1.2.2.md   # Notas da versão 1.2.2
+├── RELEASE_NOTES_v1.2.3.md   # Notas da versão atual (estabilização)
 └── README.md
 ```
 
@@ -264,13 +265,14 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 | Versão | Data | Descrição |
 | :--- | :--- | :--- |
+| **v1.2.3** | Abr/2026 | Novo motor de cálculo de duração e automação de fuso horário (Brasília). |
 | **v1.2.2** | Abr/2026 | Otimização de latência (migração para Ohio), upgrade de dados (chaves primárias para bigint/int8). |
 | **v1.2.1** | Abr/2026 | Hotfix crítico: reforço do Security Lock com normalização de perfil e bloqueio de fallback geral na query. |
 | **v1.2.0** | Abr/2026 | Trava de segurança em relatórios (Security Lock), relatório "Consolidado" para Gestor/Admin, refatoração do cache. |
 | **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
 | **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
 
-> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.2.2.md](RELEASE_NOTES_v1.2.2.md).
+> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.2.3.md](RELEASE_NOTES_v1.2.3.md).
 
 ---
 
@@ -283,4 +285,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v1.2.2
+Desenvolvido com ☕ e Python · 2026 · v1.2.3
