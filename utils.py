@@ -92,17 +92,29 @@ def agrupar_por_data(df, mes_ref, ano_ref):
     
     if df.empty:
         df_agrupado = df_base
-        for col in ['inicio', 'termino', 'caso', 'observacoes', 'valor_base_snapshot']: df_agrupado[col] = ""
+        for col in ['inicio', 'termino', 'caso', 'observacoes', 'valor_base_snapshot']: 
+            df_agrupado[col] = ""
+        df_agrupado['duracao_td'] = pd.Timedelta(0)
     else:
         df['data'] = pd.to_datetime(df['data'])
         df = df[(df['data'] >= inicio_p) & (df['data'] <= fim_p)]
         
         df['valor_base_snapshot'] = pd.to_numeric(df['valor_base_snapshot'], errors='coerce').fillna(0.0)
         
+        # Calcular duracao_td antes do agrupamento
+        df['inicio'] = df['inicio'].astype(str).str.strip()
+        df['termino'] = df['termino'].astype(str).str.strip()
+        
+        t_inicio = pd.to_timedelta(df['inicio'].apply(lambda x: x if ':' in str(x) else '00:00') + ':00', errors='coerce')
+        t_termino = pd.to_timedelta(df['termino'].apply(lambda x: x if ':' in str(x) else '00:00') + ':00', errors='coerce')
+        
+        df['duracao_td'] = (t_termino - t_inicio) % pd.Timedelta(days=1)
+        df['duracao_td'] = df['duracao_td'].fillna(pd.Timedelta(0))
+        
         def process_day(g):
             g = g.sort_values("inicio")
             horarios = []
-            duracao_total = timedelta(0)
+            duracao_total = pd.Timedelta(0)
             obs = []
             casos = set()
             vbs = 0.0
@@ -110,9 +122,9 @@ def agrupar_por_data(df, mes_ref, ano_ref):
             for _, row in g.iterrows():
                 ti = str(row.get('inicio', ''))
                 tf = str(row.get('termino', ''))
-                if ti and tf and ti != 'nan' and tf != 'nan':
+                if ti and tf and ti != 'nan' and tf != 'nan' and ':' in ti and ':' in tf:
                     horarios.append(f"{ti} - {tf}")
-                    duracao_total += calcular_duracao(ti, tf)
+                    duracao_total += row.get('duracao_td', pd.Timedelta(0))
                 
                 c = str(row.get('caso', ''))
                 if c and c.strip() and c.lower() != 'nan' and c.lower() != 'none':
@@ -147,7 +159,7 @@ def agrupar_por_data(df, mes_ref, ano_ref):
 
         grouped = df.groupby('data').apply(process_day, include_groups=False).reset_index()
         df_agrupado = pd.merge(df_base, grouped, on='data', how='left').fillna("")
-        df_agrupado['duracao_td'] = df_agrupado['duracao_td'].apply(lambda x: x if pd.notnull(x) and x != "" else timedelta(0))
+        df_agrupado['duracao_td'] = pd.to_timedelta(df_agrupado['duracao_td'], errors='coerce').fillna(pd.Timedelta(0))
     
     df_agrupado['semana'] = df_agrupado['data'].apply(get_dia_semana)
     df_agrupado['horas_trabalhadas'] = df_agrupado['duracao_td'].apply(formatar_timedelta)
