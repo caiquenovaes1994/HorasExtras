@@ -90,15 +90,16 @@ def agrupar_por_data(df, mes_ref, ano_ref):
     datas_periodo = pd.date_range(start=inicio_p, end=fim_p)
     df_base = pd.DataFrame({'data': datas_periodo})
     
+    if not df.empty:
+        df['data'] = pd.to_datetime(df['data'])
+        df = df[(df['data'] >= inicio_p) & (df['data'] <= fim_p)]
+    
     if df.empty:
         df_agrupado = df_base
         for col in ['inicio', 'termino', 'caso', 'observacoes', 'valor_base_snapshot']: 
             df_agrupado[col] = ""
         df_agrupado['duracao_td'] = pd.Timedelta(0)
     else:
-        df['data'] = pd.to_datetime(df['data'])
-        df = df[(df['data'] >= inicio_p) & (df['data'] <= fim_p)]
-        
         df['valor_base_snapshot'] = pd.to_numeric(df['valor_base_snapshot'], errors='coerce').fillna(0.0)
         
         # Calcular duracao_td antes do agrupamento
