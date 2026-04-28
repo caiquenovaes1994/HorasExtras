@@ -556,7 +556,7 @@ with st.sidebar:
         <div style='margin-top: 100px; line-height: 1.1;'>
             Desenvolvido por <b>Caique Novaes</b><br>
             Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
-            <span style='color: #2ecc71; font-weight: bold;'>v1.2.1</span>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.2.2</span>
         </div>
         """, 
         unsafe_allow_html=True

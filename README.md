@@ -6,7 +6,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-1.2.1-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.2.1.md)
+[![Version](https://img.shields.io/badge/version-1.2.2-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.2.2.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ---
@@ -147,7 +147,8 @@ HorasExtras/
 ├── requirements.txt          # Dependências do projeto
 ├── start.bat                 # Script de inicialização automática (Windows)
 ├── RELEASE_NOTES_v1.2.md     # Notas da versão 1.2.0
-├── RELEASE_NOTES_v1.2.1.md   # Notas da versão atual (hotfix)
+├── RELEASE_NOTES_v1.2.1.md   # Notas da versão 1.2.1
+├── RELEASE_NOTES_v1.2.2.md   # Notas da versão atual (infraestrutura)
 └── README.md
 ```
 
@@ -263,12 +264,13 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 | Versão | Data | Descrição |
 | :--- | :--- | :--- |
+| **v1.2.2** | Abr/2026 | Otimização de latência (migração para Ohio), upgrade de dados (chaves primárias para bigint/int8). |
 | **v1.2.1** | Abr/2026 | Hotfix crítico: reforço do Security Lock com normalização de perfil e bloqueio de fallback geral na query. |
 | **v1.2.0** | Abr/2026 | Trava de segurança em relatórios (Security Lock), relatório "Consolidado" para Gestor/Admin, refatoração do cache. |
 | **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
 | **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
 
-> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.2.1.md](RELEASE_NOTES_v1.2.1.md).
+> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.2.2.md](RELEASE_NOTES_v1.2.2.md).
 
 ---
 
@@ -281,4 +283,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v1.2.1
+Desenvolvido com ☕ e Python · 2026 · v1.2.2
