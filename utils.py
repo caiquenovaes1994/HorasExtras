@@ -103,19 +103,21 @@ def agrupar_por_data(df, mes_ref, ano_ref):
         df['valor_base_snapshot'] = pd.to_numeric(df['valor_base_snapshot'], errors='coerce').fillna(0.0)
         
         # Calcular duracao_td antes do agrupamento
-        df['inicio'] = df['inicio'].astype(str).str.strip()
-        df['termino'] = df['termino'].astype(str).str.strip()
+        df['inicio'] = df['inicio'].fillna('').astype(str).str.strip()
+        df['termino'] = df['termino'].fillna('').astype(str).str.strip()
         
-        t_inicio = pd.to_timedelta(df['inicio'].apply(lambda x: x if ':' in str(x) else '00:00') + ':00', errors='coerce')
-        t_termino = pd.to_timedelta(df['termino'].apply(lambda x: x if ':' in str(x) else '00:00') + ':00', errors='coerce')
+        t_inicio = pd.to_timedelta(df['inicio'].apply(lambda x: x + ':00' if ':' in str(x) else ''), errors='coerce')
+        t_termino = pd.to_timedelta(df['termino'].apply(lambda x: x + ':00' if ':' in str(x) else ''), errors='coerce')
         
         df['duracao_td'] = (t_termino - t_inicio) % pd.Timedelta(days=1)
         df['duracao_td'] = df['duracao_td'].fillna(pd.Timedelta(0))
         
-        def process_day(g):
+        # Agrupamento 1: Soma da duração (usando .agg como pedido)
+        df_duracao = df.groupby('data').agg({'duracao_td': 'sum'}).reset_index()
+        
+        def process_day_no_duracao(g):
             g = g.sort_values("inicio")
             horarios = []
-            duracao_total = pd.Timedelta(0)
             obs = []
             casos = set()
             vbs = 0.0
@@ -125,7 +127,6 @@ def agrupar_por_data(df, mes_ref, ano_ref):
                 tf = str(row.get('termino', ''))
                 if ti and tf and ti != 'nan' and tf != 'nan' and ':' in ti and ':' in tf:
                     horarios.append(f"{ti} - {tf}")
-                    duracao_total += row.get('duracao_td', pd.Timedelta(0))
                 
                 c = str(row.get('caso', ''))
                 if c and c.strip() and c.lower() != 'nan' and c.lower() != 'none':
@@ -154,11 +155,12 @@ def agrupar_por_data(df, mes_ref, ano_ref):
                 'p3': p3,
                 'caso': ', '.join(sorted(list(casos))),
                 'observacoes': ' | '.join(obs),
-                'valor_base_snapshot': vbs,
-                'duracao_td': duracao_total
+                'valor_base_snapshot': vbs
             })
 
-        grouped = df.groupby('data').apply(process_day, include_groups=False).reset_index()
+        grouped_info = df.groupby('data').apply(process_day_no_duracao, include_groups=False).reset_index()
+        grouped = pd.merge(grouped_info, df_duracao, on='data', how='inner')
+        
         df_agrupado = pd.merge(df_base, grouped, on='data', how='left').fillna("")
         df_agrupado['duracao_td'] = pd.to_timedelta(df_agrupado['duracao_td'], errors='coerce').fillna(pd.Timedelta(0))
     

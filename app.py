@@ -9,6 +9,13 @@ import re
 import database
 import utils
 import report_generator
+import pytz
+
+# Captura o horário de São Paulo (Brasília)
+fuso_sp = pytz.timezone('America/Sao_Paulo')
+data_atual_sp = datetime.now(fuso_sp)
+mes_atual = data_atual_sp.month
+ano_atual = data_atual_sp.year
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURAÇÃO
@@ -479,8 +486,8 @@ with st.sidebar:
 
     MESES = ["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO",
              "JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"]
-    m_sel = st.selectbox("Mês Referente", MESES, index=datetime.now().month - 1)
-    a_sel = st.number_input("Ano", 2024, 2030, datetime.now().year)
+    m_sel = st.selectbox("Mês Referente", MESES, index=mes_atual - 1)
+    a_sel = st.number_input("Ano", 2024, 2030, ano_atual)
 
     if st.button("🚀 GERAR PDF", use_container_width=True):
         try:
@@ -677,11 +684,11 @@ with TAB_HIST:
     if rows_all:
         # Filtros de Histórico
         c_h1, c_h2 = st.columns(2)
-        mes_atual_idx = datetime.now().month
+        mes_atual_idx = mes_atual
         with c_h1:
             m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual_idx)
         with c_h2:
-            a_hist = st.number_input("Ano ", min_value=2024, max_value=2050, value=datetime.now().year, step=1)
+            a_hist = st.number_input("Ano ", min_value=2024, max_value=2050, value=ano_atual, step=1)
         
         # Lógica de Filtragem no Histórico (Ciclo de Competência)
         if m_hist != "TODOS":
