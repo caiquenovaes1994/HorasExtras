@@ -713,26 +713,32 @@ with TAB_HIST:
     # Lógica de filtragem inicial: Se for USER, ele só vê o dele (Trava v1.2.1)
     username_filter = st.session_state.user["username"] if u_perfil == "USER" else None
     
-    # Se for Admin ou Gestor, exibe o seletor de plantonista
+    # Se for Admin ou Gestor, exibe o seletor de plantonista + Mês + Ano em linha única
     selected_usr_hist = "TODOS"
     if u_perfil in ['ADMIN', 'GESTOR']:
         all_usrs = database.get_all_users()
         u_opts_hist = ["TODOS"] + [f"{usr[2]} ({usr[1]})" for usr in all_usrs]
-        selected_usr_hist = st.selectbox("Filtrar por Plantonista", u_opts_hist, key="hist_user_filter")
-        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            selected_usr_hist = st.selectbox("Filtrar por Plantonista", u_opts_hist, key="hist_user_filter")
+        with col2:
+            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual)
+        with col3:
+            a_hist = st.number_input("Ano", min_value=2024, max_value=2050, value=ano_atual, step=1)
+
         if selected_usr_hist != "TODOS":
             m = re.search(r"\((.*)\)", selected_usr_hist)
             if m: username_filter = m.group(1)
+    else:
+        # USER: apenas Mês e Ano (sem Plantonista)
+        c_h1, c_h2 = st.columns(2)
+        with c_h1:
+            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual)
+        with c_h2:
+            a_hist = st.number_input("Ano", min_value=2024, max_value=2050, value=ano_atual, step=1)
 
     rows_all = get_cached_chamados(username_filter, u_perfil, st.session_state.user["username"])
     if rows_all:
-        # Filtros de Histórico
-        c_h1, c_h2 = st.columns(2)
-        mes_atual_idx = mes_atual
-        with c_h1:
-            m_hist = st.selectbox("Mês", options=["TODOS", "JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"], index=mes_atual_idx)
-        with c_h2:
-            a_hist = st.number_input("Ano ", min_value=2024, max_value=2050, value=ano_atual, step=1)
         
         # Lógica de Filtragem no Histórico (Ciclo de Competência)
         if m_hist != "TODOS":
@@ -761,7 +767,6 @@ with TAB_HIST:
             headers = ["", "Data", "Caso", "Hotel", "Motivo", "Início", "Término", "Observações", "Ações"]
             for col, h in zip(cols_h, headers):
                 col.markdown(f"**{h}**")
-            st.divider()
             
             def bind_checkbox(r_id):
                 key = f"chk_{r_id}"
