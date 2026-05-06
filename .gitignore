@@ -16,3 +16,4 @@ test_*.pdf
 # IDE
 .vscode/
 .idea/
+.vs/
