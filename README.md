@@ -2,12 +2,12 @@
 
 **Sistema profissional para gestão de atendimentos e controle de horas extras com geração de relatórios PDF de alta fidelidade.**
 
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://supabase.com/)
-[![ReportLab](https://img.shields.io/badge/ReportLab-PDF-lightgrey?style=for-the-badge)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-1.3.1-2ecc71?style=for-the-badge)](RELEASE_NOTES_v1.3.1.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.56.0-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql&logoColor=white)](https://supabase.com/)
+[![ReportLab](https://img.shields.io/badge/ReportLab-4.4.10-lightgrey?style=flat)](https://www.reportlab.com/)
+[![Version](https://img.shields.io/badge/version-1.3.1-2ecc71?style=flat)](RELEASE_NOTES_v1.3.1.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ---
 
@@ -113,11 +113,11 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 | Tecnologia | Versão | Finalidade |
 | :--- | :--- | :--- |
 | [Python](https://python.org) | 3.12 | Linguagem principal |
-| [Streamlit](https://streamlit.io) | 1.x | Interface web |
-| [PostgreSQL / Supabase](https://supabase.com) | — | Banco de dados em nuvem |
+| [Streamlit](https://streamlit.io) | 1.56.0 | Interface web |
+| [PostgreSQL / Supabase](https://supabase.com) | 15 | Banco de dados em nuvem |
 | [psycopg2-binary](https://pypi.org/project/psycopg2-binary/) | 2.9.11 | Driver PostgreSQL com pool de conexões |
-| [ReportLab](https://reportlab.com) | 4.4 | Geração de relatórios PDF |
-| [Pandas](https://pandas.pydata.org) | 3.x | Manipulação e agrupamento de dados |
+| [ReportLab](https://reportlab.com) | 4.4.10 | Geração de relatórios PDF |
+| [Pandas](https://pandas.pydata.org) | 3.0.2 | Manipulação e agrupamento de dados |
 | [holidays](https://pypi.org/project/holidays/) | 0.94 | Detecção de feriados nacionais (BR) |
 | [bcrypt](https://pypi.org/project/bcrypt/) | — | Hash seguro de senhas |
 | [cryptography](https://pypi.org/project/cryptography/) | — | Criptografia Fernet (AES) |
@@ -202,8 +202,9 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 Desenvolvido por **Caique Novaes**
 
-- E-mail: [caiquenovaes1994@gmail.com](mailto:caiquenovaes1994@gmail.com)
-- GitHub: [@caiquenovaes1994](https://github.com/caiquenovaes1994)
+[![GitHub](https://img.shields.io/badge/GitHub-caiquenovaes1994-181717?style=flat&logo=github&logoColor=white)](https://github.com/caiquenovaes1994)
+&nbsp;
+[![Gmail](https://img.shields.io/badge/Gmail-caiquenovaes1994@gmail.com-EA4335?style=flat&logo=gmail&logoColor=white)](mailto:caiquenovaes1994@gmail.com)
 
 ---
 
