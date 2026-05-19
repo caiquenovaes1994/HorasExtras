@@ -17,3 +17,4 @@ test_*.pdf
 .vscode/
 .idea/
 .vs/
+pyrightconfig.json

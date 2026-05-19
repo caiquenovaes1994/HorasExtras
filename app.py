@@ -26,6 +26,88 @@ mes_atual = data_atual_sp.month
 ano_atual = data_atual_sp.year
 
 # ─────────────────────────────────────────────────────────────────────────────
+# AUXILIARES DO DASHBOARD DE INDICADORES
+# ─────────────────────────────────────────────────────────────────────────────
+def obter_competencia_anterior(mes_ref_extenso, ano_ref):
+    meses_pt = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", 
+                "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"]
+    try:
+        idx = meses_pt.index(mes_ref_extenso.upper())
+    except ValueError:
+        return None, None
+    
+    if idx == 0:
+        return "DEZEMBRO", ano_ref - 1
+    else:
+        return meses_pt[idx - 1], ano_ref
+
+def formatar_horas_kpi(td):
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if minutes == 0:
+        return f"{hours}h"
+    return f"{hours}h{minutes:02d}"
+
+def formatar_media_kpi(td):
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours}h{minutes:02d}min"
+
+def formatar_dinheiro(val):
+    return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def calcular_metricas_dashboard(chamados_list, all_users_dict, default_vbase):
+    total_50 = timedelta(0)
+    total_100 = timedelta(0)
+    ganhos_estimados = 0.0
+    total_chamados = len(chamados_list)
+    
+    for r in chamados_list:
+        duracao = utils.calcular_duracao(r[5], r[6])
+        try:
+            data_dt = datetime.strptime(r[1], "%Y-%m-%d")
+        except:
+            data_dt = datetime.now()
+            
+        semana = utils.get_dia_semana(data_dt)
+        is_100 = semana in ["DOMINGO", "FERIADO"]
+        
+        if is_100:
+            total_100 += duracao
+        else:
+            total_50 += duracao
+            
+        try:
+            row_vbase = float(r[9]) if r[9] is not None else 0.0
+        except:
+            row_vbase = 0.0
+            
+        if row_vbase <= 0.0:
+            row_vbase = all_users_dict.get(r[10], default_vbase)
+            
+        row_vhora = row_vbase / 200.0
+        horas = duracao.total_seconds() / 3600.0
+        
+        if is_100:
+            ganhos_estimados += horas * row_vhora * 2.0
+        else:
+            ganhos_estimados += horas * row_vhora * 1.5
+            
+    total_duracao = total_50 + total_100
+    media_duracao = (total_duracao / total_chamados) if total_chamados > 0 else timedelta(0)
+    
+    return {
+        "total_50": total_50,
+        "total_100": total_100,
+        "ganhos_estimados": ganhos_estimados,
+        "total_chamados": total_chamados,
+        "media_duracao": media_duracao,
+        "total_duracao": total_duracao
+    }
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURAÇÃO
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Controle de Horas Extras", layout="wide", initial_sidebar_state="expanded")
@@ -261,7 +343,7 @@ def _dlg_editar_hotel():
         salvar   = c1.form_submit_button("SOLICITAR ALTERAÇÃO", use_container_width=True)
         cancelar = c2.form_submit_button("CANCELAR", use_container_width=True)
     if salvar:
-        database.criar_solicitacao_hotel(d["rid"], new_nome.strip(), 'EDIT', st.session_state.user["id"])
+        database.criar_solicitacao_hotel(d["rid"], (new_nome or "").strip(), 'EDIT', st.session_state.user["id"])
         st.success("Solicitação de edição enviada!")
         st.session_state.dlg_hotel_editar = None
         st.rerun()
@@ -309,7 +391,7 @@ def _dlg_editar_usuario():
         salvar    = c1.form_submit_button("SALVAR",   use_container_width=True)
         cancelar  = c2.form_submit_button("CANCELAR", use_container_width=True)
     if salvar:
-        if database.update_user(d["uid"], new_uname.strip(), new_nome.strip(),
+        if database.update_user(d["uid"], (new_uname or "").strip(), (new_nome or "").strip(),
                                 new_perf, new_vbase, new_pw or None):
             st.success("Atualizado!")
             st.session_state.dlg_user_editar = None
@@ -339,7 +421,7 @@ def _dlg_editar_perfil():
         new_pw    = st.text_input("Alterar Minha Senha (em branco = manter)", type="password")
         c1, c2 = st.columns(2)
         if c1.form_submit_button("SALVAR", use_container_width=True):
-            if database.update_user(u["id"], new_uname, new_nome, u.get("perfil", "USER"), new_vbase, new_pw or None):
+            if database.update_user(u["id"], str(new_uname or ""), str(new_nome or ""), u.get("perfil", "USER"), new_vbase, new_pw or None):
                 st.session_state.user["nome"] = new_nome
                 st.session_state.user["username"] = new_uname
                 st.session_state.user["valor_base"] = new_vbase
@@ -415,9 +497,9 @@ def _dlg_editar_registro():
         cb1, cb2 = st.columns(2)
         if cb1.form_submit_button("SALVAR", use_container_width=True):
             rid_, hnome_ = (f_hsel.split(" - ", 1) if f_hsel and " - " in f_hsel else ("", f_hsel))
-            database.update_chamado(cid, f_data.strftime("%Y-%m-%d"), f_caso.strip(), rid_, hnome_, 
+            database.update_chamado(cid, f_data.strftime("%Y-%m-%d"), (f_caso or "").strip(), rid_, hnome_, 
                                     utils.processar_input_horario(f_inicio), 
-                                    utils.processar_input_horario(f_fim), f_obs.strip(), f_motivo.strip())
+                                    utils.processar_input_horario(f_fim), (f_obs or "").strip(), (f_motivo or "").strip())
             st.cache_data.clear()  # Invalida cache para atualizar histórico imediatamente
             st.success("Atualizado!")
             st.session_state.dlg_reg_editar = None
@@ -607,11 +689,13 @@ with st.sidebar:
         <div style='margin-top: 100px; line-height: 1.1;'>
             Desenvolvido por <b>Caique Novaes</b><br>
             Desenvolvido com <span style='font-size: 1.3rem;'>☕</span> e Python · 2026<br>
-            <span style='color: #2ecc71; font-weight: bold;'>v1.3.1</span>
+            <span style='color: #2ecc71; font-weight: bold;'>v1.4.0</span>
         </div>
         """, 
         unsafe_allow_html=True
     )
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTEÚDO PRINCIPAL
@@ -701,6 +785,10 @@ TAB_HOTEL = tab_map.get("🏨 Hotéis")
 TAB_USER = tab_map.get("⚙️ Usuários")
 TAB_APROV = tab_map.get("🔔 Aprovações")
 
+assert TAB_HIST is not None
+assert TAB_HOTEL is not None
+assert TAB_USER is not None
+
 
 # ── ABA 0 – Novo Registro ─────────────────────────────────────────────────────
 if TAB_REG:
@@ -738,72 +826,185 @@ with TAB_HIST:
             a_hist = st.number_input("Ano", min_value=2024, max_value=2050, value=ano_atual, step=1)
 
     rows_all = get_cached_chamados(username_filter, u_perfil, st.session_state.user["username"])
-    if rows_all:
-        
-        # Lógica de Filtragem no Histórico (Ciclo de Competência)
-        if m_hist != "TODOS":
-            inicio_comp, fim_comp = utils.obter_faixa_periodo(m_hist, a_hist)
-            st.caption(f"Exibindo período de competência: **{inicio_comp.strftime('%d/%m/%Y')}** a **{fim_comp.strftime('%d/%m/%Y')}**")
+    if rows_all is None:
+        rows_all = []
 
-        rows = []
-        for r in rows_all:
-            dt_obj = datetime.strptime(r[1], "%Y-%m-%d")
-            if m_hist != "TODOS":
-                if not (inicio_comp <= dt_obj <= fim_comp): continue
+    # Lógica de Filtragem no Histórico (Ciclo de Competência)
+    inicio_comp, fim_comp = None, None
+    if m_hist != "TODOS":
+        inicio_comp, fim_comp = utils.obter_faixa_periodo(m_hist, a_hist)
+        st.caption(f"Exibindo período de competência: **{inicio_comp.strftime('%d/%m/%Y')}** a **{fim_comp.strftime('%d/%m/%Y')}**")
+
+    rows = []
+    for r in rows_all:
+        dt_obj = datetime.strptime(r[1], "%Y-%m-%d")
+        if m_hist != "TODOS" and inicio_comp is not None and fim_comp is not None:
+            if not (inicio_comp <= dt_obj <= fim_comp): continue
+        else:
+            if a_hist and dt_obj.year != a_hist: continue
+        rows.append(r)
+
+    # ── KPI CARDS / DASHBOARD DE INDICADORES ──────────────────────────────────
+    # Carrega salários dos usuários para fallback se valor_base_snapshot for zero
+    all_users_dict = {usr[1]: usr[5] for usr in database.get_all_users()}
+    default_vbase = float(st.session_state.user.get("valor_base", 0.0))
+    
+    # Calcular métricas para a competência atual
+    metricas_atuais = calcular_metricas_dashboard(rows, all_users_dict, default_vbase)
+
+    # Estilização CSS dos metric cards (Dark Mode Blend)
+    st.markdown("""
+    <style>
+    [data-testid="stMetric"] {
+        background: transparent;
+        border: 1px solid #800000;
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        background: rgba(128, 0, 0, 0.05);
+        box-shadow: 0 8px 20px rgba(128, 0, 0, 0.3);
+        border-color: #ff4d4d;
+    }
+    [data-testid="metric-container"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    [data-testid="stMetricLabel"] {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    [data-testid="stMetricLabel"] > div,
+    [data-testid="stMetricLabel"] > label,
+    [data-testid="stMetricLabel"] * {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    [data-testid="stMetricLabel"] p {
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+        color: #b0b0b8 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: center !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0 auto !important;
+    }
+    [data-testid="stMetricValue"] {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    [data-testid="stMetricValue"] > div,
+    [data-testid="stMetricValue"] * {
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+        color: #ff4d4d !important;
+        margin-top: 4px;
+        text-align: center !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+    [data-testid="stMetricDelta"] {
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    
+    val_horas = f"{formatar_horas_kpi(metricas_atuais['total_50'])} / {formatar_horas_kpi(metricas_atuais['total_100'])}"
+    col_kpi1.metric(label="🕐 Horas (50% / 100%)", value=val_horas)
+    
+    val_ganhos = formatar_dinheiro(metricas_atuais["ganhos_estimados"])
+    col_kpi2.metric(label="💰 Ganhos Estimados", value=val_ganhos)
+    
+    col_kpi3.metric(label="📋 Total Chamados", value=str(metricas_atuais["total_chamados"]))
+    
+    val_media = formatar_media_kpi(metricas_atuais["media_duracao"])
+    col_kpi4.metric(label="📊 Média / Chamado", value=val_media)
+    
+    st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
+
+    if rows:
+        sel_count = len(st.session_state.selected_records)
+        cols_bulk = st.columns([2, 6])
+        with cols_bulk[0]:
+            if not is_gestor:
+                if st.button(f"🗑️ Deletar {sel_count} selecionado(s)" if sel_count > 0 else "Deletar Selecionados", disabled=(sel_count == 0), use_container_width=True):
+                    st.session_state.dlg_bulk_delete = True
+                    st.rerun()
+            
+        cols_h = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
+        headers = ["", "Data", "Caso", "Hotel", "Motivo", "Início", "Término", "Observações", "Ações"]
+        for col, h in zip(cols_h, headers):
+            col.markdown(f"**{h}**")
+        
+        def bind_checkbox(r_id):
+            key = f"chk_{r_id}"
+            if st.session_state[key]: st.session_state.selected_records.add(r_id)
+            else: st.session_state.selected_records.discard(r_id)
+        
+        for r in rows:
+            c0, c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
+            rid = r[0]
+            
+            # Checkbox sync (Gestor não seleciona pois não deleta em massa)
+            chk_key = f"chk_{rid}"
+            if not is_gestor:
+                c0.checkbox(" ", key=chk_key, value=(rid in st.session_state.selected_records), on_change=bind_checkbox, args=(rid,), label_visibility="collapsed")
+            
+            dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
+            c1.write(dt_fmt)
+            c2.write(r[2] or "—")
+            c3.write(f"{r[3]} - {r[4]}")
+            c4.write(r[8] or "—")
+            c5.write(r[5])
+            c6.write(r[6])
+            c7.write(r[7] or "—")
+            
+            if is_gestor:
+                # Gestor: Apenas ícone de Olho
+                if c8.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar", use_container_width=True):
+                    st.session_state.dlg_reg_ver = r[0]
+                    st.rerun()
             else:
-                if a_hist and dt_obj.year != a_hist: continue
-            rows.append(r)
-            
-        if rows:
-            sel_count = len(st.session_state.selected_records)
-            cols_bulk = st.columns([2, 6])
-            with cols_bulk[0]:
-                if not is_gestor:
-                    if st.button(f"🗑️ Deletar {sel_count} selecionado(s)" if sel_count > 0 else "Deletar Selecionados", disabled=(sel_count == 0), use_container_width=True):
-                        st.session_state.dlg_bulk_delete = True
-                        st.rerun()
-                
-            cols_h = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
-            headers = ["", "Data", "Caso", "Hotel", "Motivo", "Início", "Término", "Observações", "Ações"]
-            for col, h in zip(cols_h, headers):
-                col.markdown(f"**{h}**")
-            
-            def bind_checkbox(r_id):
-                key = f"chk_{r_id}"
-                if st.session_state[key]: st.session_state.selected_records.add(r_id)
-                else: st.session_state.selected_records.discard(r_id)
-            
-            for r in rows:
-                c0, c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([0.4, 0.8, 0.8, 1.5, 1.2, 0.7, 0.7, 1.2, 0.8])
-                rid = r[0]
-                
-                # Checkbox sync (Gestor não seleciona pois não deleta em massa)
-                chk_key = f"chk_{rid}"
-                if not is_gestor:
-                    c0.checkbox(" ", key=chk_key, value=(rid in st.session_state.selected_records), on_change=bind_checkbox, args=(rid,), label_visibility="collapsed")
-                
-                dt_fmt = datetime.strptime(r[1], "%Y-%m-%d").strftime("%d/%m/%Y")
-                c1.write(dt_fmt)
-                c2.write(r[2] or "—")
-                c3.write(f"{r[3]} - {r[4]}")
-                c4.write(r[8] or "—")
-                c5.write(r[5])
-                c6.write(r[6])
-                c7.write(r[7] or "—")
-                
-                if is_gestor:
-                    # Gestor: Apenas ícone de Olho
-                    if c8.button("👁️", key=f"ver_reg_{r[0]}", help="Visualizar", use_container_width=True):
-                        st.session_state.dlg_reg_ver = r[0]
-                        st.rerun()
-                else:
-                    bt_ver, bt_ed = c8.columns(2)
-                    if bt_ver.button("👁️", key=f"ver_reg_{r[0]}"):
-                        st.session_state.dlg_reg_ver = r[0]
-                        st.rerun()
-                    if bt_ed.button("✏️", key=f"ed_reg_{r[0]}"):
-                        st.session_state.dlg_reg_editar = r[0]
-                        st.rerun()
+                bt_ver, bt_ed = c8.columns(2)
+                if bt_ver.button("👁️", key=f"ver_reg_{r[0]}"):
+                    st.session_state.dlg_reg_ver = r[0]
+                    st.rerun()
+                if bt_ed.button("✏️", key=f"ed_reg_{r[0]}"):
+                    st.session_state.dlg_reg_editar = r[0]
+                    st.rerun()
     else:
         st.info("Nenhum registro encontrado.")
 

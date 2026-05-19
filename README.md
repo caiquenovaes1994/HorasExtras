@@ -6,7 +6,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.56.0-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-4.4.10-lightgrey?style=flat)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-1.3.1-2ecc71?style=flat)](RELEASE_NOTES_v1.3.1.md)
+[![Version](https://img.shields.io/badge/version-1.4.0-2ecc71?style=flat)](RELEASE_NOTES_v1.4.0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ---
@@ -79,6 +79,12 @@ O banco de dados é hospedado em nuvem no **Supabase (PostgreSQL)** localizado n
 - **Imutabilidade histórica:** Reajustes salariais futuros não afetam a integridade dos cálculos de meses anteriores.
 - **Fallback inteligente:** Registros legados sem snapshot utilizam automaticamente o salário atual do perfil.
 
+### 📊 Dashboard de Indicadores (KPI Cards)
+
+- **Acompanhamento em Tempo Real:** 4 cartões de indicadores (KPIs) exibidos no topo do histórico de atendimentos.
+- **Métricas Consolidadas:** Totais de horas 50% e 100%, ganhos brutos estimados, contagem de chamados e duração média.
+- **Design Adaptativo:** Efeitos tridimensionais no hover com bordas de realce vinho/carmim, totalmente alinhados com o tema escuro.
+
 ### 🗑️ Exclusão em Massa
 
 - Seleção múltipla de registros no histórico via checkboxes.
@@ -149,7 +155,8 @@ HorasExtras/
 ├── RELEASE_NOTES_v1.2.2.md   # Notas da versão 1.2.2
 ├── RELEASE_NOTES_v1.2.3.md   # Notas da versão 1.2.3
 ├── RELEASE_NOTES_v1.3.0.md   # Notas da versão 1.3.0 (compliance LGPD)
-├── RELEASE_NOTES_v1.3.1.md   # Notas da versão atual (ajustes de interface)
+├── RELEASE_NOTES_v1.3.1.md   # Notas da versão 1.3.1 (ajustes de interface)
+├── RELEASE_NOTES_v1.4.0.md   # Notas da versão atual (dashboard de indicadores)
 └── README.md
 ```
 
@@ -185,6 +192,7 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 | Versão | Data | Descrição |
 | :--- | :--- | :--- |
+| **v1.4.0** | Mai/2026 | Minor Update: Painel de indicadores (KPI Cards) no topo do histórico com totalização de horas, ganhos estimados, chamados e média de tempo por atendimento. |
 | **v1.3.1** | Mai/2026 | Patch de interface: filtros do Histórico unificados em linha única e correção de glitch visual no cabeçalho da tabela. |
 | **v1.3.0** | Abr/2026 | Conformidade legal (LGPD) com aceite obrigatório de Termos de Uso. |
 | **v1.2.3** | Abr/2026 | Novo motor de cálculo de duração e automação de fuso horário (Brasília). |
@@ -194,7 +202,7 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 | **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
 | **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
 
-> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.3.1.md](RELEASE_NOTES_v1.3.1.md).
+> Veja as notas completas da versão atual em [RELEASE_NOTES_v1.4.0.md](RELEASE_NOTES_v1.4.0.md).
 
 ---
 
@@ -208,4 +216,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v1.3.1
+Desenvolvido com ☕ e Python · 2026 · v1.4.0
