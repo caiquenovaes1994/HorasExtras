@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import datetime, date, time, timedelta
 import holidays
-
+import dateutil.easter
 # Cache por ano para evitar recriação a cada linha
 _feriados_cache = {}
 
@@ -11,7 +11,7 @@ def get_feriados(ano: int):
         return _feriados_cache[ano]
 
     # Nacionais
-    f = holidays.Brazil(state="SP", years=ano)
+    f = holidays.country_holidays("BR", subdiv="SP", years=ano)
 
     # Municipais de São Paulo/SP (fixos que a lib pode não incluir)
     municipais = {
@@ -19,7 +19,19 @@ def get_feriados(ano: int):
         date(ano, 7, 9):  "Revolução Constitucionalista",
         date(ano, 11, 20): "Dia da Consciência Negra",
     }
-    f.update(municipais)
+
+    # Feriados móveis (Carnaval e Corpus Christi) baseados na Páscoa
+    try:
+        pascoa = dateutil.easter.easter(ano)
+        carnaval = pascoa - timedelta(days=47)
+        corpus_christi = pascoa + timedelta(days=60)
+        municipais[carnaval] = "Carnaval"
+        municipais[corpus_christi] = "Corpus Christi"
+    except Exception as e:
+        print(f"Erro ao calcular feriados móveis para o ano {ano}: {e}")
+
+    for d, name in municipais.items():
+        f[d] = name
 
     _feriados_cache[ano] = f
     return f
@@ -165,7 +177,7 @@ def agrupar_por_data(df, mes_ref, ano_ref):
         df_agrupado['duracao_td'] = pd.to_timedelta(df_agrupado['duracao_td'], errors='coerce').fillna(pd.Timedelta(0))
     
     df_agrupado['semana'] = df_agrupado['data'].apply(get_dia_semana)
-    df_agrupado['horas_trabalhadas'] = df_agrupado['duracao_td'].apply(formatar_timedelta)
+    df_agrupado['horas_trabalhadas'] = df_agrupado.apply(lambda row: formatar_timedelta(row['duracao_td']), axis=1)
     
     def calc_percentual(row):
         if not row['horas_trabalhadas']: return pd.Series(["", ""])

@@ -25,9 +25,6 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 # Diretórios locais para exportação CSV
 EXPORT_DIR = os.path.join("data", "exports")
 
-# Fonte externa SQLite para sincronização inicial de hotéis (fallback local)
-EXTERNAL_SOURCE = os.path.join("data", "hotels_source.sqlite")
-
 # Chave Secreta para Criptografia de Dados (Salários)
 SECRET_KEY = os.getenv("SECRET_KEY")
 ADMIN_PWD  = os.getenv("ADMIN_PWD", "mudar123")
@@ -109,6 +106,7 @@ def get_db():
     garantindo que a conexão seja SEMPRE devolvida ao pool.
     """
     _init_pool()
+    assert _pool is not None, "Falha ao inicializar o pool de conexões PostgreSQL."
     conn = _pool.getconn()
     try:
         yield conn
@@ -261,34 +259,7 @@ def init_db():
         # Hotel padrão
         cur.execute("INSERT INTO hoteis (rid, nome) VALUES ('B669', 'Ibis Caruaru') ON CONFLICT (rid) DO NOTHING")
 
-    # Sincroniza hotéis externos (fallback local)
-    with get_db() as conn2:
-        cur2 = conn2.cursor()
-        cur2.execute("SELECT COUNT(*) FROM hoteis")
-        total = cur2.fetchone()[0]
-    if total <= 1:
-        _sync_hotels()
 
-
-def _sync_hotels():
-    """Importa hotéis de uma fonte SQLite externa (fallback local)."""
-    if not os.path.exists(EXTERNAL_SOURCE):
-        return
-    try:
-        import sqlite3
-        ext = sqlite3.connect(EXTERNAL_SOURCE)
-        rows = ext.execute("SELECT DISTINCT rid, nome FROM hotels WHERE rid IS NOT NULL AND rid != ''").fetchall()
-        ext.close()
-
-        with get_db() as conn:
-            cur = conn.cursor()
-            for rid, nome in rows:
-                cur.execute(
-                    "INSERT INTO hoteis (rid, nome) VALUES (%s, %s) ON CONFLICT (rid) DO NOTHING",
-                    (rid, nome)
-                )
-    except Exception as e:
-        print(f"[SYNC] Erro ao sincronizar hotéis: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -476,7 +447,7 @@ def save_chamado(data, caso, rid, hotel, inicio, termino, obs, motivo, username:
 
 def get_all_chamados(username_filter: str | None = None, perfil: str | None = None, logged_username: str | None = None) -> list[tuple]:
     # Normalização do perfil para garantir consistência nas checagens
-    perfil_norm = str(perfil).strip().upper() if perfil else 'USER'
+    perfil_norm = perfil.strip().upper() if perfil else 'USER'
     
     # LOG DE SEGURANÇA (Para monitoramento no console do Render/Docker)
     print(f"[SECURITY LOG] Perfil: {perfil_norm}, LoggedUser: {logged_username}, FilterRequested: {username_filter}")
