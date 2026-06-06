@@ -8,7 +8,7 @@ def login_form() -> rx.Component:
                 AuthState.login_error != "",
                 rx.callout(
                     AuthState.login_error,
-                    icon="alert_triangle",
+                    icon="triangle_alert",
                     color_scheme="red",
                     role="alert",
                     width="100%",
@@ -85,7 +85,7 @@ def reset_password_form() -> rx.Component:
                 AuthState.login_error != "",
                 rx.callout(
                     AuthState.login_error,
-                    icon="alert_triangle",
+                    icon="triangle_alert",
                     color_scheme="red",
                     role="alert",
                     width="100%",
