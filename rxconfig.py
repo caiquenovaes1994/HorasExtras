@@ -25,7 +25,7 @@ config = rx.Config(
     app_name="sandbox_reflex",
     db_url=_db_url,
     backend_host="0.0.0.0",
-    frontend_port=int(_port),
+    backend_port=int(_port),
     plugins=[
         rx.plugins.SitemapPlugin(),
         rx.plugins.TailwindV4Plugin(),
