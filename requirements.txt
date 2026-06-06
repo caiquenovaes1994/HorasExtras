@@ -1,0 +1,12 @@
+reflex==0.9.4
+bcrypt==5.0.0
+cryptography==48.0.0
+python-dotenv==1.2.2
+reportlab==4.5.1
+holidays==0.98
+python-dateutil==2.9.0.post0
+sqlmodel==0.0.38
+pytz
+granian==2.7.5
+psycopg2-binary==2.9.12
+pillow==12.2.0
