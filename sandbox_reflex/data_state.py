@@ -161,16 +161,24 @@ class DataState(AuthState):
         if not self.selected_records:
             return
             
-        with rx.session() as session:
-            for rid in self.selected_records:
-                chamado = session.get(Chamado, int(rid))
-                if chamado:
-                    session.delete(chamado)
-            session.commit()
-            backup_tabela(session, Chamado, "chamados")
-            
-        self.selected_records = []
-        self.load_registros()
+        try:
+            with rx.session() as session:
+                for rid in self.selected_records:
+                    chamado = session.get(Chamado, int(rid))
+                    if chamado:
+                        session.delete(chamado)
+                session.commit()
+                
+                try:
+                    from .backup_utils import backup_tabela
+                    backup_tabela(session, Chamado, "chamados")
+                except Exception:
+                    pass
+                
+            self.selected_records = []
+            self.load_registros()
+        except Exception as e:
+            return rx.window_alert(f"Erro ao deletar: {str(e)}")
         
     def view_record(self, record_id: str):
         # Stub para a Fase futura (modal de visualizar)

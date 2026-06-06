@@ -111,6 +111,13 @@ class FormState(rx.State):
             
             vbase_atual = user_info.user_info.get("valor_base", "0.0")
             
+            from . import database
+            try:
+                vbase_float = float(vbase_atual)
+            except:
+                vbase_float = 0.0
+            vbase_encrypted = database._encrypt(vbase_float)
+            
             with rx.session() as session:
                 if self.record_id == -1:
                     novo = Chamado(
@@ -123,7 +130,7 @@ class FormState(rx.State):
                         observacoes=self.f_obs.strip() or None,
                         motivo=self.f_motivo.strip(),
                         username=user_info.user_info["username"],
-                        valor_base_snapshot=str(vbase_atual)
+                        valor_base_snapshot=vbase_encrypted
                     )
                     session.add(novo)
                 else:
@@ -137,6 +144,7 @@ class FormState(rx.State):
                         record.termino = tf
                         record.observacoes = self.f_obs.strip() or None
                         record.motivo = self.f_motivo.strip()
+                        # Nota: na edição original (Streamlit) não se alterava o snapshot, manteremos igual.
                         session.add(record)
                 session.commit()
                 backup_tabela(session, Chamado, "chamados")
