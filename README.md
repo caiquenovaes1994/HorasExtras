@@ -6,7 +6,7 @@
 [![Reflex](https://img.shields.io/badge/Reflex-0.9.4-6C47FF?style=flat&logo=reflex&logoColor=white)](https://reflex.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-4.5.1-lightgrey?style=flat)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-2.0.0-2ecc71?style=flat)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.1-2ecc71?style=flat)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ---
@@ -212,8 +212,6 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 | **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
 | **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
 
-> Veja as notas completas da v2.0.0 em [CHANGELOG.md](CHANGELOG.md).
-
 ---
 
 ## Autor
@@ -226,4 +224,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v2.0.0
+Desenvolvido com ☕ e Python · 2026 · v2.0.1
