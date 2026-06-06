@@ -975,7 +975,15 @@ def apply_supabase_migrations():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS aceitou_termos BOOLEAN DEFAULT FALSE"))
             conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_aceite TEXT"))
-            # Também garantir que as outras colunas existam, caso o Supabase esteja vazio
+            
+            # Corrige a coluna data para DATE caso tenha vindo do SQLite como TEXT
+            try:
+                conn.execute(text("ALTER TABLE chamados ALTER COLUMN data TYPE DATE USING data::date"))
+                conn.execute(text("ALTER TABLE usuarios ALTER COLUMN is_admin TYPE BOOLEAN USING CASE WHEN is_admin::text = '1' THEN TRUE WHEN is_admin::text = '0' THEN FALSE ELSE is_admin::boolean END"))
+                conn.execute(text("ALTER TABLE usuarios ALTER COLUMN must_change_password TYPE BOOLEAN USING CASE WHEN must_change_password::text = '1' THEN TRUE WHEN must_change_password::text = '0' THEN FALSE ELSE must_change_password::boolean END"))
+            except Exception as e:
+                logging.warning(f"[Migração] Aviso ao alterar colunas para DATE/BOOLEAN: {e}")
+                
             conn.commit()
             logging.info("[Migração] Colunas aceitou_termos e data_aceite verificadas/adicionadas no Supabase.")
     except Exception as e:
