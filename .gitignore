@@ -1,0 +1,14 @@
+__pycache__/
+.states
+assets/external/
+.web/
+*.db
+*.py[cod]
+venv/
+.env
+data/exports/
+reflex.lock/
+bun.lock
+
+# Legacy / arquivos grandes
+Streamlit_legacy.zip
