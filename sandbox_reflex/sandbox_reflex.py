@@ -93,25 +93,16 @@ def novo_chamado_modal() -> rx.Component:
                         rx.input(placeholder="Caso...", value=FormState.f_caso, on_change=FormState.set_f_caso, disabled=FormState.is_view_only, width="100%"),
                         
                         rx.text("Hotel", size="2", font_weight="bold"),
-                        rx.box(
-                            rx.el.datalist(
-                                rx.foreach(FormState.hoteis_opts, lambda h: rx.el.option(value=h)),
-                                id="hoteis_list"
-                            ),
-                            rx.input(
-                                placeholder="Selecione ou busque o hotel...",
-                                value=FormState.f_hotel,
-                                on_change=FormState.set_f_hotel,
-                                disabled=FormState.is_view_only,
-                                custom_attrs={"list": "hoteis_list"},
-                                width="100%",
-                                background_color="#262730",
-                                border="1px solid rgba(250, 250, 250, 0.2)",
-                                color="white",
-                                _focus={"border": "1px solid #ff4d4d", "box_shadow": "0 0 0 1px #ff4d4d"},
-                                cursor="pointer",
-                            ),
-                            width="100%"
+                        rx.select(
+                            FormState.hoteis_opts,
+                            value=FormState.f_hotel,
+                            on_change=FormState.set_f_hotel,
+                            disabled=FormState.is_view_only,
+                            placeholder="Selecione o hotel...",
+                            width="100%",
+                            color_scheme="ruby",
+                            variant="surface",
+                            cursor="pointer",
                         ),
                         
                         rx.text("Motivo *", size="2", font_weight="bold"),
