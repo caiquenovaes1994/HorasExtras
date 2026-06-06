@@ -19,5 +19,3 @@ test_*.pdf
 .vs/
 pyrightconfig.json
 
-# Sandbox
-sandbox_reflex/
