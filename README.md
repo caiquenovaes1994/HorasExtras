@@ -32,8 +32,6 @@ O sistema gerencia todo o fluxo: desde o registro do chamado até a geração do
 
 O banco de dados é hospedado em nuvem no **Supabase (PostgreSQL)** localizado na região **Ohio (us-east-2)**, garantindo alta disponibilidade, backups automáticos e altíssima performance.
 
-> **v2.0.0** — O sistema foi completamente reescrito, migrando do Streamlit para o **Reflex**, uma arquitetura full-stack Python com frontend reativo compilado em React e backend ASGI. Veja a [motivação técnica](ISSUE_refactor_framework.md) e o [plano de migração](ROADMAP_REFLEX.md).
-
 ---
 
 ## Funcionalidades
@@ -141,7 +139,7 @@ O sistema opera com três níveis de permissão, garantindo segregação funcion
 ```text
 HorasExtras/
 │
-├── HorasExtras_Reflex/           # Pacote principal da aplicação
+├── sandbox_reflex/               # Pacote principal da aplicação
 │   ├── __init__.py               # Inicializador do pacote
 │   ├── sandbox_reflex.py         # App Reflex — páginas, rotas e componentes UI
 │   ├── login.py                  # Componente de tela de login
