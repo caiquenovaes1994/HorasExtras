@@ -1,4 +1,4 @@
-# [Refactor] Migração do Streamlit para framework mais leve (Reflex ou Flet)
+# ✅ [FECHADA — v2.0.0] Migração do Streamlit para framework mais leve (Reflex)
 
 ## 🎯 Objetivo
 
@@ -37,33 +37,39 @@ O Streamlit apresenta limitações estruturais que se tornam cada vez mais evide
 
 ### Funcionalidades que devem ser preservadas
 
-- [ ] Autenticação com sessão persistente (cookie com token Fernet)
-- [ ] CRUD de chamados (Novo Registro, Edição, Exclusão, Visualização)
-- [ ] Histórico com filtros e KPI Cards
-- [ ] Gestão de Hotéis com fluxo de aprovação
-- [ ] Gestão de Usuários (ADMIN)
-- [ ] Geração de PDF com ReportLab (pode ser via endpoint/backend)
-- [ ] Hierarquia de perfis (ADMIN, GESTOR, USER) com Security Lock no banco
-- [ ] Compliance LGPD (aceite de termos)
+- [x] Autenticação com sessão persistente (cookie com token Fernet)
+- [x] CRUD de chamados (Novo Registro, Edição, Exclusão, Visualização)
+- [x] Histórico com filtros e KPI Cards
+- [x] Gestão de Hotéis com fluxo de aprovação
+- [x] Gestão de Usuários (ADMIN)
+- [x] Geração de PDF com ReportLab (via backend desacoplado)
+- [x] Hierarquia de perfis (ADMIN, GESTOR, USER) com Security Lock no banco
+- [x] Compliance LGPD (aceite de termos)
 
 ---
 
-## 🔬 Próximos Passos
+## ✅ Resolução
 
-1. **Protótipo com Reflex:** Criar um protótipo da tela de Login + Histórico para avaliar a experiência de desenvolvimento.
-2. **Protótipo com Flet:** Idem para Flet, especialmente avaliar a viabilidade do deploy web.
-3. **Benchmark comparativo:** Avaliar tamanho do bundle, tempo de carregamento e consumo de memória.
-4. **Decisão:** Documentar a decisão técnica e criar um plano de migração incremental por módulo.
+**Framework escolhido: Reflex** — migração concluída na v2.0.0 (2026-06-06).
 
----
-
-## 🏷️ Contexto Atual
-
-- **Versão atual:** v1.4.1
-- **Framework atual:** Streamlit 1.56.0
-- **Backend:** Python 3.12 + Supabase (PostgreSQL 15)
-- **Geração de PDF:** ReportLab 4.4.10
+- Reflex foi selecionado pela sua arquitetura full-stack Python nativa, suporte a cookies nativos, estado reativo e deploy compatível com Render.
+- Flet foi descartado por limitações no deploy web e maturidade do ecossistema.
+- A migração completa foi realizada de forma isolada (sandbox), sem impacto na v1.4.1 em produção durante o desenvolvimento.
 
 ---
 
-> **Nota:** Esta issue é de natureza exploratória. A migração só será iniciada após a conclusão do estudo comparativo e validação dos protótipos.
+## 🏷️ Contexto
+
+| | v1.4.1 (legado) | v2.0.0 (atual) |
+|---|---|---|
+| **Framework** | Streamlit 1.56.0 | Reflex 0.9.4 |
+| **Frontend** | Streamlit nativo | React (compilado pelo Reflex) + TailwindCSS v4 |
+| **Servidor** | Uvicorn | Granian (ASGI) |
+| **Backend** | Python 3.12 | Python 3.12 |
+| **Banco** | SQLite / Supabase (PostgreSQL 15) | SQLite / Supabase (PostgreSQL 15) |
+| **PDF** | ReportLab 4.4.10 | ReportLab 4.5.1 |
+| **Status** | ⛔ Descontinuado | ✅ Em produção |
+
+---
+
+> **Nota:** Issue encerrada. Código legado arquivado em `Streamlit_legacy.zip`. Consulte o [CHANGELOG.md](./CHANGELOG.md) para o detalhamento completo da v2.0.0.
