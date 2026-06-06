@@ -961,6 +961,29 @@ def index() -> rx.Component:
     )
 
 # Configuração Global
+def apply_supabase_migrations():
+    """Garante que colunas recém-adicionadas existam no Supabase sem usar Alembic."""
+    from rxconfig import config
+    from sqlmodel import create_engine, text
+    import logging
+    
+    if not config.db_url or "sqlite" in config.db_url:
+        return
+        
+    try:
+        engine = create_engine(config.db_url)
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS aceitou_termos BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_aceite TEXT"))
+            # Também garantir que as outras colunas existam, caso o Supabase esteja vazio
+            conn.commit()
+            logging.info("[Migração] Colunas aceitou_termos e data_aceite verificadas/adicionadas no Supabase.")
+    except Exception as e:
+        logging.error(f"[Migração] Erro ao aplicar migrações no Supabase: {e}")
+
+# Aplica migrações estruturais diretamente no DB antes de iniciar o app
+apply_supabase_migrations()
+
 app = rx.App(
     theme=rx.theme(
         appearance="dark",

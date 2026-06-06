@@ -9,12 +9,12 @@ class Usuario(rx.Model, table=True):
     username: str = Field(unique=True, index=True)
     password: str
     nome_completo: Optional[str] = None
-    is_admin: int = Field(default=0)
+    is_admin: bool = Field(default=False)
     perfil: str = Field(default="USER")
-    must_change_password: int = Field(default=1)
+    must_change_password: bool = Field(default=True)
     valor_base: str = Field(default="0.0")
     valor_base_secure: str = Field(default="0.0")
-    aceitou_termos: int = Field(default=0)
+    aceitou_termos: bool = Field(default=False)
     data_aceite: Optional[str] = None
 
 class Chamado(rx.Model, table=True):

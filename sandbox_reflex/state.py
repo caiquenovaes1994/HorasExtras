@@ -135,7 +135,7 @@ class AuthState(rx.State):
             
             if user_model:
                 user_model.password = database._hash_pw(new_password)
-                user_model.must_change_password = 0
+                user_model.must_change_password = False
                 session.add(user_model)
                 session.commit()
                 
@@ -164,14 +164,16 @@ class AuthState(rx.State):
         from datetime import datetime
         data_atual_sp = datetime.now().isoformat()
         
+        data_atual_sp = datetime.now()
+        
         with rx.session() as session:
             user_model = session.exec(
                 select(Usuario).where(Usuario.id == self.user_info["id"])
             ).first()
             
             if user_model:
-                user_model.aceitou_termos = 1
-                user_model.data_aceite = data_atual_sp
+                user_model.aceitou_termos = True
+                user_model.data_aceite = data_atual_sp.strftime("%Y-%m-%d %H:%M:%S")
                 session.add(user_model)
                 session.commit()
                 

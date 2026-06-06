@@ -94,10 +94,10 @@ class UsuarioState(rx.State):
                     nome_completo=self.u_nome,
                     is_admin=is_admin_flag,
                     perfil=self.u_perfil,
-                    must_change_password=1,
+                    must_change_password=True,
                     valor_base="0.0",
                     valor_base_secure="0.0",
-                    aceitou_termos=0
+                    aceitou_termos=False
                 )
                 session.add(novo)
                 session.commit()
@@ -153,7 +153,7 @@ class UsuarioState(rx.State):
                 hashed = bcrypt.hashpw(senha_padrao.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
                 
                 user_db.password = hashed
-                user_db.must_change_password = 1
+                user_db.must_change_password = True
                 session.add(user_db)
                 session.commit()
                 backup_tabela(session, Usuario, "usuarios")
