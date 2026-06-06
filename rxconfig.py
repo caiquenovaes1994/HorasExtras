@@ -18,9 +18,14 @@ if _db_host and _db_host != "localhost":
 else:
     _db_url = "sqlite:///horas_extras.db"
 
+# Porta definida pelo Render (ou default)
+_port = os.getenv("PORT", "3000")
+
 config = rx.Config(
     app_name="sandbox_reflex",
     db_url=_db_url,
+    backend_host="0.0.0.0",
+    frontend_port=int(_port),
     plugins=[
         rx.plugins.SitemapPlugin(),
         rx.plugins.TailwindV4Plugin(),
