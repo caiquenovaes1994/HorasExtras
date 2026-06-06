@@ -60,7 +60,7 @@ com frontend compilado em React e backend FastAPI/ASGI.
 ### 📦 Dependências
 
 | Pacote | Versão |
-|---|---|
+| --- | --- |
 | reflex | 0.9.4 |
 | bcrypt | 5.0.0 |
 | cryptography | 48.0.0 |
