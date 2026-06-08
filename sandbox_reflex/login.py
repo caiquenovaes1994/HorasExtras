@@ -164,7 +164,7 @@ def login_page() -> rx.Component:
                     font_family="'Inter', sans-serif"
                 ),
                 rx.text("Desenvolvido com ☕ e Python · 2026", white_space="nowrap", font_family="'Inter', sans-serif"),
-                rx.text("v2.0", color="#2ecc71", weight="bold", font_family="'Inter', sans-serif"),
+                rx.text("v2.0.2", color="#2ecc71", weight="bold", font_family="'Inter', sans-serif"),
                 font_size="10px",
                 color="#b0b0b8",
                 align="center",

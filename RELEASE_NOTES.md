@@ -1,5 +1,13 @@
 # Release Notes - HorasExtras
 
+## [v2.0.2] - 2026-06-08
+
+### Correções de Bugs (Bug Fixes)
+
+- **Porta Dinâmica no Deploy (Render):** Correção no parâmetro de porta (substituição de `port` por `frontend_port` no `rxconfig.py`), permitindo que a aplicação em modo *single port* utilize dinamicamente a porta definida pela variável de ambiente (`$PORT`) injetada pelo provedor de nuvem (Render), solucionando os erros de timeout ("No open ports detected").
+- **Falha no Relatório Consolidado (Equipe):** Corrigido erro estrutural onde a geração do PDF consolidado falhava ao tentar extrair dados diretamente do modelo `Chamado` que na verdade pertenciam ao modelo `Usuario`. O processo foi refatorado para realizar o cruzamento correto de dados.
+- **Valores a Receber (PDF):** Corrigida falha no cálculo financeiro dentro dos relatórios PDF. O valor capturado no snapshot estava sendo passado cifrado, causando falha de conversão e zerando os ganhos de horas 50% e 100%. Adicionada a rotina de descriptografia pré-processamento.
+
 ## [v2.0.1] - 2026-06-06
 
 ### Correções de Bugs (Bug Fixes)

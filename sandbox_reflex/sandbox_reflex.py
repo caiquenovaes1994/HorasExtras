@@ -783,7 +783,7 @@ def sidebar() -> rx.Component:
                 rx.text("Caique Novaes", as_="span", weight="bold"),
             ),
             rx.text("Desenvolvido com ☕ e Python · 2026", margin_top="4px", white_space="nowrap"),
-            rx.text("v2.0.1", color="#2ecc71", weight="bold"),
+            rx.text("v2.0.2", color="#2ecc71", weight="bold"),
             font_size="10px",
             color="#b0b0b8",
             align="center",

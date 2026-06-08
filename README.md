@@ -6,7 +6,7 @@
 [![Reflex](https://img.shields.io/badge/Reflex-0.9.4-6C47FF?style=flat&logo=reflex&logoColor=white)](https://reflex.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-4.5.1-lightgrey?style=flat)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-2.0.1-2ecc71?style=flat)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.2-2ecc71?style=flat)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ---
@@ -200,6 +200,8 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 | Versão | Data | Descrição |
 | :--- | :--- | :--- |
+| **v2.0.2** | Jun/2026 | Patch Update: Correções de port binding para deploy no Render e ajustes na geração do relatório em PDF consolidado e individual. |
+| **v2.0.1** | Jun/2026 | Patch Update: Correções na auto-migração Supabase, encriptação financeira e melhorias de UI no selector de hotéis. |
 | **v2.0.0** | Jun/2026 | **Major Release:** Refatoração completa — migração de Streamlit para Reflex 0.9.4. Arquitetura full-stack reativa com frontend React, backend ASGI (Granian), estado gerenciado e UI 100% Python. |
 | **v1.4.1** | Jun/2026 | Patch Update: Correção no cálculo de feriados móveis (Corpus Christi e Carnaval) e ajustes no linter. |
 | **v1.4.0** | Mai/2026 | Minor Update: Painel de indicadores (KPI Cards) no topo do histórico com totalização de horas, ganhos estimados, chamados e média de tempo por atendimento. |
@@ -224,4 +226,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v2.0.1
+Desenvolvido com ☕ e Python · 2026 · v2.0.2
