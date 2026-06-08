@@ -280,14 +280,20 @@ class DataState(AuthState):
                         nome = self.filtro_plantonista
                         vbase = 0.0
                 
+            from . import database
             raw_dicts = []
             for c in chamados_bd:
+                try:
+                    decrypted_snapshot = database._decrypt(c.valor_base_snapshot)
+                except:
+                    decrypted_snapshot = 0.0
+                    
                 raw_dicts.append({
                     "data": c.data,
                     "inicio": c.inicio,
                     "termino": c.termino,
                     "observacoes": c.observacoes,
-                    "valor_base_snapshot": c.valor_base_snapshot,
+                    "valor_base_snapshot": str(decrypted_snapshot),
                     "valor_base_fallback": vbase,
                 })
             
@@ -333,21 +339,46 @@ class DataState(AuthState):
                 )
                 chamados_bd = session.exec(query).all()
                 
+            # Carrega usuários para mapear nome e valor base
+            with rx.session() as session:
+                from .models import Usuario
+                from . import database
+                usuarios_bd = session.exec(select(Usuario)).all()
+                usuarios_map = {}
+                for u in usuarios_bd:
+                    try:
+                        vbase_dec = float(database._decrypt(u.valor_base))
+                    except:
+                        vbase_dec = 0.0
+                    usuarios_map[u.username] = {
+                        "nome": u.nome_completo or u.username,
+                        "vbase": vbase_dec
+                    }
+                    
             # Agrupa os chamados brutos por Username
             agrupado_por_user = {}
             for c in chamados_bd:
                 user = c.username
                 if user not in agrupado_por_user:
+                    u_info = usuarios_map.get(user, {"nome": user, "vbase": 0.0})
                     agrupado_por_user[user] = {
-                        "nome": c.nome_completo or user,
-                        "vbase": float(c.valor_base) if c.valor_base else 0.0,
+                        "nome": u_info["nome"],
+                        "vbase": u_info["vbase"],
                         "registros": []
                     }
+                    
+                try:
+                    decrypted_snapshot = database._decrypt(c.valor_base_snapshot)
+                except:
+                    decrypted_snapshot = 0.0
+                    
                 agrupado_por_user[user]["registros"].append({
                     "data": c.data,
                     "inicio": c.inicio,
                     "termino": c.termino,
-                    "observacoes": c.observacoes
+                    "observacoes": c.observacoes,
+                    "valor_base_snapshot": str(decrypted_snapshot),
+                    "valor_base_fallback": agrupado_por_user[user]["vbase"]
                 })
                 
             lista_consolidados = []
