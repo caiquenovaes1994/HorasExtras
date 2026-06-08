@@ -998,6 +998,10 @@ def apply_supabase_migrations():
 apply_supabase_migrations()
 
 app = rx.App(
+    theme=rx.theme(
+        appearance="dark",
+        has_background=False,
+    ),
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
         "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"
