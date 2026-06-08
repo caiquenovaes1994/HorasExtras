@@ -1,10 +1,11 @@
 import reflex as rx
 from typing import Optional
 from datetime import date
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 
-class Usuario(rx.Model, table=True):
+class Usuario(SQLModel, table=True):
     __tablename__ = "usuarios"
+    id: Optional[int] = Field(default=None, primary_key=True)
     
     username: str = Field(unique=True, index=True)
     password: str
@@ -17,8 +18,9 @@ class Usuario(rx.Model, table=True):
     aceitou_termos: bool = Field(default=False)
     data_aceite: Optional[str] = None
 
-class Chamado(rx.Model, table=True):
+class Chamado(SQLModel, table=True):
     __tablename__ = "chamados"
+    id: Optional[int] = Field(default=None, primary_key=True)
     
     data: date
     caso: Optional[str] = None
@@ -31,14 +33,16 @@ class Chamado(rx.Model, table=True):
     username: Optional[str] = None
     valor_base_snapshot: str = Field(default="0.0")
 
-class Hotel(rx.Model, table=True):
+class Hotel(SQLModel, table=True):
     __tablename__ = "hoteis"
+    id: Optional[int] = Field(default=None, primary_key=True)
     
     rid: str = Field(unique=True, index=True)
     nome: str
 
-class SolicitacaoHotel(rx.Model, table=True):
+class SolicitacaoHotel(SQLModel, table=True):
     __tablename__ = "solicitacoes_hoteis"
+    id: Optional[int] = Field(default=None, primary_key=True)
     
     rid: str
     nome: str

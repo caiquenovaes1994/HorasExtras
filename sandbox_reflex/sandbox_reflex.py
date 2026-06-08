@@ -787,10 +787,16 @@ def sidebar() -> rx.Component:
             rx.button(
                 "v2.0.3", 
                 on_click=rx.redirect("/changelog"), 
-                variant="outline", 
-                color_scheme="green", 
+                variant="soft", 
+                color="#2ecc71",
+                background_color="rgba(46, 204, 113, 0.1)",
+                border="1px solid rgba(46, 204, 113, 0.2)",
+                border_radius="16px",
                 size="1",
+                padding="4px 10px",
+                margin_top="4px",
                 cursor="pointer",
+                _hover={"background_color": "rgba(46, 204, 113, 0.2)"},
             ),
             font_size="10px",
             color="#b0b0b8",
@@ -992,10 +998,6 @@ def apply_supabase_migrations():
 apply_supabase_migrations()
 
 app = rx.App(
-    theme=rx.theme(
-        appearance="dark",
-        has_background=False,
-    ),
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
         "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"

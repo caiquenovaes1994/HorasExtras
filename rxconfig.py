@@ -28,6 +28,7 @@ config = rx.Config(
     frontend_port=int(_port),
     backend_port=int(_port),
     plugins=[
+        rx.plugins.RadixThemesPlugin(theme=rx.theme(appearance="dark", has_background=False)),
         rx.plugins.SitemapPlugin(),
         rx.plugins.TailwindV4Plugin(),
     ]
