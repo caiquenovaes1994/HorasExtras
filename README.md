@@ -6,7 +6,7 @@
 [![Reflex](https://img.shields.io/badge/Reflex-0.9.4-6C47FF?style=flat&logo=reflex&logoColor=white)](https://reflex.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat&logo=postgresql&logoColor=white)](https://supabase.com/)
 [![ReportLab](https://img.shields.io/badge/ReportLab-4.5.1-lightgrey?style=flat)](https://www.reportlab.com/)
-[![Version](https://img.shields.io/badge/version-2.0.2-2ecc71?style=flat)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.3-2ecc71?style=flat)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 ---
@@ -19,7 +19,6 @@
 - [Tecnologias](#tecnologias)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Uso](#uso)
-- [Histórico de Versões](#histórico-de-versões)
 - [Autor](#autor)
 
 ---
@@ -196,26 +195,6 @@ O comportamento da interface varia conforme o **perfil do usuário logado**:
 
 ---
 
-## Histórico de Versões
-
-| Versão | Data | Descrição |
-| :--- | :--- | :--- |
-| **v2.0.2** | Jun/2026 | Patch Update: Correções de port binding para deploy no Render e ajustes na geração do relatório em PDF consolidado e individual. |
-| **v2.0.1** | Jun/2026 | Patch Update: Correções na auto-migração Supabase, encriptação financeira e melhorias de UI no selector de hotéis. |
-| **v2.0.0** | Jun/2026 | **Major Release:** Refatoração completa — migração de Streamlit para Reflex 0.9.4. Arquitetura full-stack reativa com frontend React, backend ASGI (Granian), estado gerenciado e UI 100% Python. |
-| **v1.4.1** | Jun/2026 | Patch Update: Correção no cálculo de feriados móveis (Corpus Christi e Carnaval) e ajustes no linter. |
-| **v1.4.0** | Mai/2026 | Minor Update: Painel de indicadores (KPI Cards) no topo do histórico com totalização de horas, ganhos estimados, chamados e média de tempo por atendimento. |
-| **v1.3.1** | Mai/2026 | Patch de interface: filtros do Histórico unificados em linha única e correção de glitch visual no cabeçalho da tabela. |
-| **v1.3.0** | Abr/2026 | Conformidade legal (LGPD) com aceite obrigatório de Termos de Uso. |
-| **v1.2.3** | Abr/2026 | Novo motor de cálculo de duração e automação de fuso horário (Brasília). |
-| **v1.2.2** | Abr/2026 | Otimização de latência (migração para Ohio), upgrade de dados (chaves primárias para bigint/int8). |
-| **v1.2.1** | Abr/2026 | Hotfix crítico: reforço do Security Lock com normalização de perfil e bloqueio de fallback geral na query. |
-| **v1.2.0** | Abr/2026 | Trava de segurança em relatórios (Security Lock), relatório "Consolidado" para Gestor/Admin, refatoração do cache. |
-| **v1.1.0** | Abr/2026 | Pool de conexões PostgreSQL, snapshot salarial por registro, exclusão em massa, backup CSV automático. |
-| **v1.0.0** | 2026 | Versão inicial — autenticação, CRUD de registros, geração de PDF, gestão de hotéis e usuários. |
-
----
-
 ## Autor
 
 Desenvolvido por **Caique Novaes**
@@ -226,4 +205,4 @@ Desenvolvido por **Caique Novaes**
 
 ---
 
-Desenvolvido com ☕ e Python · 2026 · v2.0.2
+Desenvolvido com ☕ e Python · 2026 · v2.0.3

@@ -1,5 +1,6 @@
 import reflex as rx
 from . import login
+from . import changelog
 from .state import AuthState
 from .data_state import DataState, MESES_PT, ANOS
 from .state_form import FormState
@@ -783,7 +784,14 @@ def sidebar() -> rx.Component:
                 rx.text("Caique Novaes", as_="span", weight="bold"),
             ),
             rx.text("Desenvolvido com ☕ e Python · 2026", margin_top="4px", white_space="nowrap"),
-            rx.text("v2.0.2", color="#2ecc71", weight="bold"),
+            rx.button(
+                "v2.0.3", 
+                on_click=rx.redirect("/changelog"), 
+                variant="outline", 
+                color_scheme="green", 
+                size="1",
+                cursor="pointer",
+            ),
             font_size="10px",
             color="#b0b0b8",
             align="center",
